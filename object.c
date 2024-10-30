@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "memory.h"
-#include "table.h"
 #include "value.h"
 #include "vm.h"
 
@@ -70,7 +69,7 @@ static ObjectString *allocateString(char *chars, int length, uint32_t hash) {
 	ObjectString *string = ALLOCATE_OBJECT(ObjectString, OBJECT_STRING);
 	string->length = length;
 	string->chars = chars;
-	string->hash = hash;
+	string->Object.hash = hash;
 	push(OBJECT_VAL(string));
 	tableSet(&vm.strings, string, NIL_VAL);
 	pop();
@@ -145,6 +144,10 @@ void printObject(Value value) {
 			printf("<array>\n");
 			break;
 		}
+		case OBJECT_TABLE: {
+			printf("<table>\n");
+			break;
+		}
 	}
 }
 
@@ -185,7 +188,7 @@ ObjectNative *newNative(NativeFn function, int arity) {
 	return native;
 }
 
-static int calculateArrayCapacity(int n) {
+static int calculateCollectionCapacity(int n) {
 	if (n >= UINT16_MAX - 1) {
 		return UINT16_MAX - 1;
 	}
@@ -204,7 +207,7 @@ static int calculateArrayCapacity(int n) {
 
 ObjectArray *newArray(int elementCount) {
 	ObjectArray *array = ALLOCATE_OBJECT(ObjectArray, OBJECT_ARRAY);
-	array->capacity = calculateArrayCapacity(elementCount);
+	array->capacity = calculateCollectionCapacity(elementCount);
 	array->size = 0;
 	array->array = ALLOCATE(Value, array->capacity);
 	return array;
@@ -214,4 +217,46 @@ ObjectArray *growArray(ObjectArray *array) {
 	array->array = GROW_ARRAY(Value, array->array, array->capacity, array->capacity * 2);
 	array->capacity *= 2;
 	return array;
+}
+
+
+ObjectTable *newTable(int elementCount) {
+	ObjectTable *table = ALLOCATE_OBJECT(ObjectTable, OBJECT_TABLE);
+	table->capacity = calculateCollectionCapacity(elementCount);
+	table->size = 0;
+	table->values = ALLOCATE(ValueEntry, table->capacity);
+	return table;
+}
+
+static ValueEntry* findEntry(ValueEntry* entries, int capacity, Value *key) {}
+
+static void adjustCapacity(ObjectTable *table, int capacity) {}
+
+bool objectTableSet(ObjectTable *table, Value *key, Value value) {
+	return true;
+}
+
+bool objectTableGet(ObjectTable *table, Value *key, Value *value) {
+	return true;
+}
+
+bool objectTableDelete(ObjectTable *table, Value *key) {
+	return true;
+}
+
+void objectTableRemoveWhite(ObjectTable *table) {
+	for (int i = 0; i < table->capacity; i++) {
+		ValueEntry *entry = &table->values[i];
+		if (entry->key != NIL_VAL && !AS_OBJECT(entry->key)->isMarked) { // TODO: test this
+			objectTableDelete(table, &entry->key);
+		}
+	}
+}
+
+void markObjectTable(ObjectTable *table) {
+	for (int i = 0; i < table->capacity; i++) {
+		ValueEntry *entry = &table->values[i];
+		markValue(entry->key);
+		markValue(entry->value);
+	}
 }

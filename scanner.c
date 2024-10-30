@@ -256,6 +256,8 @@ Token scanToken() {
 			return makeToken(match('=') ? TOKEN_SLASH_EQUAL : TOKEN_SLASH);
 		case '*':
 			return makeToken(match('=') ? TOKEN_STAR_EQUAL : TOKEN_STAR);
+		case ':':
+			return makeToken(TOKEN_COLON);
 		case '%':
 			return makeToken(TOKEN_PERCENT);
 		case '!':

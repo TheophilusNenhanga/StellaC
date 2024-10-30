@@ -63,6 +63,9 @@ typedef enum {
 	OP_SET_GLOBAL_STAR,
 	OP_SET_GLOBAL_PLUS,
 	OP_SET_GLOBAL_MINUS,
+	OP_TABLE,
+	OP_TABLE_GET,
+	OP_TABLE_SET,
 } OpCode;
 
 typedef struct {

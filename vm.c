@@ -758,6 +758,19 @@ static InterpretResult run() {
 				break;
 			}
 
+			case OP_TABLE: {
+				uint16_t elementCount = READ_SHORT();
+				ObjectTable *table = newTable(elementCount);
+				table->size = elementCount;
+				for (int i = elementCount-1; i >= 0; i--) {
+					Value value = pop();
+					Value key = pop();
+				}
+				push(OBJECT_VAL(table));
+				break;
+			}
+
+
 			case OP_ARRAY: {
 				uint16_t elementCount = READ_SHORT();
 				ObjectArray *array = newArray(elementCount);

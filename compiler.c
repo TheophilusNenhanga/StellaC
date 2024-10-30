@@ -745,6 +745,24 @@ static void fnDeclaration() {
 	defineVariable(global);
 }
 
+static void tableLiteral(bool canAssign) {
+	uint16_t elementCount = 0;
+	if (!match(TOKEN_RIGHT_BRACE)) {
+		do {
+			expression();
+			if (elementCount >= UINT16_MAX) {
+				error("Too many elements in table declaration.");
+			}
+			consume(TOKEN_COLON, "Expected ':' after table key.");
+			expression();
+			elementCount++;
+		}while (match(TOKEN_COMMA));
+		consume(TOKEN_RIGHT_BRACE, "Expected '}' after table elements.");
+	}
+	emitByte(OP_TABLE);
+	emitBytes(elementCount >> 8 & 0xff, elementCount & 0xff);
+}
+
 static void arrayLiteral(bool canAssign) {
 	uint16_t elementCount = 0;
 
@@ -752,14 +770,14 @@ static void arrayLiteral(bool canAssign) {
 		do {
 			expression();
 			if (elementCount >= UINT16_MAX) {
-				error("Too many elements in array literal");
+				error("Too many elements in array declaration");
 			}
 			elementCount++;
 		} while (match(TOKEN_COMMA));
 		consume(TOKEN_RIGHT_SQUARE, "Expected ']' after array elements");
 	}
 	emitByte(OP_ARRAY);
-	emitBytes(((elementCount >> 8) & 0xff), (elementCount & 0xff));
+	emitBytes(elementCount >> 8 & 0xff, elementCount & 0xff);
 }
 
 static void arrayIndex(bool canAssign) {
@@ -1027,7 +1045,7 @@ static void unary(bool canAssign) {
 ParseRule rules[] = {
 		[TOKEN_LEFT_PAREN] = {grouping, call, PREC_CALL},
 		[TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
-		[TOKEN_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
+		[TOKEN_LEFT_BRACE] = {tableLiteral, NULL, PREC_NONE},
 		[TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
 		[TOKEN_LEFT_SQUARE] = {arrayLiteral, arrayIndex, PREC_CALL},
 		[TOKEN_RIGHT_SQUARE] = {NULL, NULL, PREC_NONE},

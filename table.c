@@ -9,8 +9,6 @@
 
 #include "value.h"
 
-#define TABLE_MAX_LOAD 0.6
-
 void initTable(Table *table) {
 	table->count = 0;
 	table->capacity = 0;
@@ -23,7 +21,7 @@ void freeTable(Table *table) {
 }
 
 static Entry *findEntry(Entry *entries, int capacity, ObjectString *key) {
-	uint32_t index = key->hash & (capacity - 1);
+	uint32_t index = key->Object.hash & (capacity - 1);
 	Entry *tombstone = NULL;
 	for (;;) {
 		Entry *entry = &entries[index];
@@ -131,7 +129,7 @@ ObjectString *tableFindString(Table *table, const char *chars, int length, uint3
 			// Stop if we find an empty non tombstone entry
 			if (IS_NIL(entry->value))
 				return NULL;
-		} else if (entry->key->length == length && entry->key->hash == hash &&
+		} else if (entry->key->length == length && entry->key->Object.hash == hash &&
 							 memcmp(entry->key->chars, chars, length) == 0) {
 			// we found it
 			return entry->key;
