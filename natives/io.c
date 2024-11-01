@@ -4,6 +4,8 @@
 
 #include <stdio.h>
 
+void valuePrint(Value value);
+
 void printNumber(Value value) {
 	double number = AS_NUMBER(value);
 	if (number == (int) number) {
@@ -17,7 +19,7 @@ void printNumber(Value value) {
 void printArray(ObjectArray *array) {
 	printf("[");
 	for (int i = 0; i < array->size; i++) {
-		printValue(array->array[i]);
+		valuePrint(array->array[i]);
 		if (i != array->size - 1) {
 			printf(", ");
 		}
@@ -40,7 +42,12 @@ void valuePrint(Value value) {
 	}
 }
 
-Value printNative(int argCount, Value *args) {
+Value print(int argCount, Value *args) {
+	valuePrint(args[0]);
+	return NIL_VAL;
+}
+
+Value printLine(int argCount, Value *args) {
 	valuePrint(args[0]);
 	printf("\n");
 	return NIL_VAL;

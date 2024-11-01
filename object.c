@@ -19,6 +19,7 @@ static Object *allocateObject(size_t size, ObjectType type) {
 	object->type = type;
 	object->next = vm.objects;
 	object->isMarked = false;
+	object->hash = 2166136261u;
 	vm.objects = object;
 
 #ifdef DEBUG_LOG_GC
@@ -39,6 +40,7 @@ ObjectClass *newClass(ObjectString *name) {
 	ObjectClass *klass = ALLOCATE_OBJECT(ObjectClass, OBJECT_CLASS);
 	initTable(&klass->methods);
 	klass->name = name;
+	klass->object.hash = hashBytes(&klass, sizeof(*klass));
 	return klass;
 }
 
@@ -60,6 +62,7 @@ ObjectClosure *newClosure(ObjectFunction *function) {
 	closure->function = function;
 	closure->upvalues = upvalues;
 	closure->upvalueCount = function->upvalueCount;
+	closure->object.hash = hashBytes(&closure, sizeof(*closure));
 	return closure;
 }
 
@@ -69,24 +72,27 @@ static ObjectString *allocateString(char *chars, int length, uint32_t hash) {
 	ObjectString *string = ALLOCATE_OBJECT(ObjectString, OBJECT_STRING);
 	string->length = length;
 	string->chars = chars;
-	string->Object.hash = hash;
+	string->object.hash = hash;
 	push(OBJECT_VAL(string));
 	tableSet(&vm.strings, string, NIL_VAL);
 	pop();
 	return string;
 }
 
-uint32_t hashString(const char *key, int length) {
+uint32_t hashBytes(const void *data, size_t size) {
 	uint32_t hash = 2166136261u;
-	for (int i = 0; i < length; i++) {
-		hash ^= (uint8_t) key[i];
-		hash *= 16777619;
+	const uint8_t *bytes = (const uint8_t *) data;
+
+	for (int i = 0; i < size; i++) {
+		hash ^= bytes[i];
+		hash *= FNV_PRIME;
 	}
 	return hash;
 }
 
+
 ObjectString *copyString(const char *chars, int length) {
-	uint32_t hash = hashString(chars, length);
+	uint32_t hash = hashBytes(chars, length);
 
 	ObjectString *interned = tableFindString(&vm.strings, chars, length, hash);
 	if (interned != NULL)
@@ -94,7 +100,7 @@ ObjectString *copyString(const char *chars, int length) {
 
 	char *heapChars = ALLOCATE(char, length + 1);
 	memcpy(heapChars, chars, length);
-	heapChars[length] = '\0'; // terminating the string because it is not terminated in the source
+	heapChars[length] = '\0';
 	return allocateString(heapChars, length, hash);
 }
 
@@ -109,7 +115,7 @@ static void printFunction(ObjectFunction *function) {
 void printObject(Value value) {
 	switch (OBJECT_TYPE(value)) {
 		case OBJECT_CLASS: {
-			printf("'%s' <class>\n", AS_CLASS(value)->name->chars);
+			printf("'%s' <class>", AS_CLASS(value)->name->chars);
 			break;
 		}
 		case OBJECT_STRING: {
@@ -121,7 +127,7 @@ void printObject(Value value) {
 			break;
 		}
 		case OBJECT_NATIVE: {
-			printf("<native fn>\n");
+			printf("<native fn>");
 			break;
 		}
 		case OBJECT_CLOSURE: {
@@ -129,11 +135,11 @@ void printObject(Value value) {
 			break;
 		}
 		case OBJECT_UPVALUE: {
-			printf("<upvalue>\n");
+			printf("<upvalue>");
 			break;
 		}
 		case OBJECT_INSTANCE: {
-			printf("'%s' <instance>\n", AS_INSTANCE(value)->klass->name->chars);
+			printf("'%s' <instance>", AS_INSTANCE(value)->klass->name->chars);
 			break;
 		}
 		case OBJECT_BOUND_METHOD: {
@@ -141,23 +147,21 @@ void printObject(Value value) {
 			break;
 		}
 		case OBJECT_ARRAY: {
-			printf("<array>\n");
+			printf("<array>");
 			break;
 		}
 		case OBJECT_TABLE: {
-			printf("<table>\n");
+			printf("<table>");
 			break;
 		}
 	}
 }
 
 ObjectString *takeString(const char *chars, int length) {
-	// claims ownership of the string that you give it
-	uint32_t hash = hashString(chars, length);
+	uint32_t hash = hashBytes(chars, length);
 
 	ObjectString *interned = tableFindString(&vm.strings, chars, length, hash);
 	if (interned != NULL) {
-		// free the string that was passed to us.
 		FREE_ARRAY(char, chars, length + 1);
 		return interned;
 	}
@@ -228,21 +232,15 @@ ObjectTable *newTable(int elementCount) {
 	return table;
 }
 
-static ValueEntry* findEntry(ValueEntry* entries, int capacity, Value *key) {}
+static ValueEntry *findEntry(ValueEntry *entries, int capacity, Value *key) {}
 
 static void adjustCapacity(ObjectTable *table, int capacity) {}
 
-bool objectTableSet(ObjectTable *table, Value *key, Value value) {
-	return true;
-}
+bool objectTableSet(ObjectTable *table, Value *key, Value value) { return true; }
 
-bool objectTableGet(ObjectTable *table, Value *key, Value *value) {
-	return true;
-}
+bool objectTableGet(ObjectTable *table, Value *key, Value *value) { return true; }
 
-bool objectTableDelete(ObjectTable *table, Value *key) {
-	return true;
-}
+bool objectTableDelete(ObjectTable *table, Value *key) { return true; }
 
 void objectTableRemoveWhite(ObjectTable *table) {
 	for (int i = 0; i < table->capacity; i++) {

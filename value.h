@@ -33,13 +33,13 @@ typedef uint64_t Value;
 #define NIL_VAL ((Value) (uint64_t) (QNAN | TAG_NIL))
 #define NUMBER_VAL(num) numToValue(num)
 
-static inline double valueToNum(Value value) {
+static double valueToNum(Value value) {
 	double num;
 	memcpy(&num, &value, sizeof(Value));
 	return num;
 }
 
-static inline Value numToValue(double num) {
+static Value numToValue(double num) {
 	Value value;
 	memcpy(&value, &num, sizeof(double));
 	return value;

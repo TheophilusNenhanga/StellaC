@@ -21,7 +21,7 @@ void freeTable(Table *table) {
 }
 
 static Entry *findEntry(Entry *entries, int capacity, ObjectString *key) {
-	uint32_t index = key->Object.hash & (capacity - 1);
+	uint32_t index = key->object.hash & (capacity - 1);
 	Entry *tombstone = NULL;
 	for (;;) {
 		Entry *entry = &entries[index];
@@ -129,7 +129,7 @@ ObjectString *tableFindString(Table *table, const char *chars, int length, uint3
 			// Stop if we find an empty non tombstone entry
 			if (IS_NIL(entry->value))
 				return NULL;
-		} else if (entry->key->length == length && entry->key->Object.hash == hash &&
+		} else if (entry->key->length == length && entry->key->object.hash == hash &&
 							 memcmp(entry->key->chars, chars, length) == 0) {
 			// we found it
 			return entry->key;
@@ -149,7 +149,7 @@ void markTable(Table *table) {
 void tableRemoveWhite(Table *table) {
 	for (int i = 0; i < table->capacity; i++) {
 		Entry *entry = &table->entries[i];
-		if (entry->key != NULL && !entry->key->Object.isMarked) {
+		if (entry->key != NULL && !entry->key->object.isMarked) {
 			tableDelete(table, entry->key);
 		}
 	}

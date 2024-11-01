@@ -11,6 +11,7 @@
 #include "compiler.h"
 #include "debug.h"
 #include "memory.h"
+#include "natives/objects.h"
 #include "object.h"
 #include "value.h"
 
@@ -244,10 +245,13 @@ void initVM() {
 
 	defineNative("time_s", currentTimeSeconds, 0);
 	defineNative("time_ms", currentTimeMillis, 0);
-	defineNative("print", printNative, 1);
+	defineNative("print", print, 1);
+	defineNative("println", printLine, 1);
 	defineNative("len", length, 1);
 	defineNative("array_add", arrayAdd, 2);
 	defineNative("array_rem", arrayRemove, 1);
+	defineNative("hash", hashValue, 1);
+	defineNative("type", valueType, 1);
 }
 
 void freeVM() {
@@ -762,12 +766,18 @@ static InterpretResult run() {
 				uint16_t elementCount = READ_SHORT();
 				ObjectTable *table = newTable(elementCount);
 				table->size = elementCount;
-				for (int i = elementCount-1; i >= 0; i--) {
+				for (int i = elementCount - 1; i >= 0; i--) {
 					Value value = pop();
 					Value key = pop();
 				}
 				push(OBJECT_VAL(table));
 				break;
+			}
+
+			case OP_TABLE_GET: {
+			}
+
+			case OP_TABLE_SET: {
 			}
 
 
@@ -776,7 +786,13 @@ static InterpretResult run() {
 				ObjectArray *array = newArray(elementCount);
 				array->size = elementCount;
 				for (int i = elementCount - 1; i >= 0; i--) {
-					array->array[i] = pop();
+					Value value = pop();
+					array->array[i] = value;
+#ifdef HASH_ARRAYS
+					uint32_t newHash = hashBytes(&value, sizeof(value));
+					array->object.hash ^= newHash;
+					array->object.hash *= FNV_PRIME;
+#endif
 				}
 				push(OBJECT_VAL(array));
 				break;
@@ -788,10 +804,9 @@ static InterpretResult run() {
 				if (index >= 0 && index < array->size) {
 					push(array->array[index]);
 					break;
-				} else {
-					runtimeError("{ Error: OP_GET_ARRAY } Array index out of bounds.");
-					return INTERPRET_RUNTIME_ERROR;
 				}
+				runtimeError("{ Error: OP_GET_ARRAY } Array index out of bounds.");
+				return INTERPRET_RUNTIME_ERROR;
 			}
 
 			case OP_SET_ARRAY: {
@@ -800,6 +815,15 @@ static InterpretResult run() {
 				ObjectArray *array = AS_ARRAY(pop());
 				if (index >= 0 && index < array->size) {
 					array->array[index] = value;
+#ifdef HASH_ARRAYS
+					uint32_t oldHash = hashBytes(&array->array[index], sizeof(value));
+					array->object.hash /= FNV_PRIME;
+					array->object.hash ^= oldHash;
+
+					uint32_t newHash = hashBytes(&value, sizeof(value));
+					array->object.hash ^= newHash;
+					array->object.hash *= FNV_PRIME;
+#endif
 				} else {
 					runtimeError("{ Error: OP_SET_ARRAY } Array index out of bounds.");
 					return INTERPRET_RUNTIME_ERROR;

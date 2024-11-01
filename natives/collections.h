@@ -2,6 +2,7 @@
 #define COLLECTIONS_H
 
 #include "../value.h"
+#include "../common.h"
 
 #define MAX_ARRAY_SIZE UINT16_MAX - 1
 

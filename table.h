@@ -1,6 +1,7 @@
 #ifndef TABLE_H
 #define TABLE_H
 #define TABLE_MAX_LOAD 0.6
+#define FNV_PRIME 16777619u
 
 #include "common.h"
 #include "value.h"

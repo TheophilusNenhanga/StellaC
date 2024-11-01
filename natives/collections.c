@@ -17,15 +17,15 @@ Value length(int argCount, Value *args) {
 }
 
 Value arrayAdd(int argCount, Value *args) {
-	Value value = args[0];
+	Value arr = args[0];
 	Value toAdd = args[1];
 
-	if (!IS_ARRAY(value)) {
+	if (!IS_ARRAY(arr)) {
 		// TODO: RUNTIME_ERROR
 		return NIL_VAL;
 	}
 
-	ObjectArray *array = AS_ARRAY(value);
+	ObjectArray *array = AS_ARRAY(arr);
 
 	if (array->size >= array->capacity) {
 		int newCapacity = array->capacity < 8 ? 8 : array->capacity * 2;
@@ -42,8 +42,14 @@ Value arrayAdd(int argCount, Value *args) {
 		array->capacity = newCapacity;
 	}
 
-	array->size++;
+#ifdef HASH_ARRAYS
+	uint32_t newHash = hashBytes(&toAdd, sizeof(toAdd));
+	array->object.hash ^= newHash;
+	array->object.hash *= FNV_PRIME;
+#endif
+
 	array->array[array->size] = toAdd;
+	array->size++;
 	return NIL_VAL;
 }
 
@@ -55,6 +61,11 @@ Value arrayRemove(int argCount, Value *args) {
 			// TODO: Runtime Error
 			return NIL_VAL;
 		} else {
+#ifdef HASH_ARRAYS
+			uint32_t oldHash = hashBytes(&array->array[array->size-1], sizeof(value));
+			array->object.hash /= FNV_PRIME;
+			array->object.hash ^= oldHash;
+#endif
 			array->array[array->size - 1] = NIL_VAL;
 			array->size--;
 			return NIL_VAL;

@@ -9,6 +9,7 @@
 // #define DEBUG_PRINT_CODE
 // #define DEBUG_LOG_GC
 // #define DEBUG_STRESS_GC
+// #define HASH_ARRAYS
 #define NAN_BOXING
 #define UINT8_COUNT (UINT8_MAX + 1)
 

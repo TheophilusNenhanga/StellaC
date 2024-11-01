@@ -51,7 +51,7 @@ struct Object {
 };
 
 struct ObjectString {
-	Object Object;
+	Object object;
 	int length;
 	char *chars;
 };
@@ -146,6 +146,7 @@ void objectTableRemoveWhite(ObjectTable *table);
 void markObjectTable(ObjectTable *table);
 
 static bool isObjectType(Value value, ObjectType type) { return IS_OBJECT(value) && AS_OBJECT(value)->type == type; }
+uint32_t hashBytes(const void* data, size_t size);
 
 #endif
 
