@@ -23,7 +23,7 @@ void freeTable(Table *table) {
 static Entry *findEntry(Entry *entries, int capacity, ObjectString *key) {
 	uint32_t index = key->object.hash & (capacity - 1);
 	Entry *tombstone = NULL;
-	for (;;) {
+	while(true) {
 		Entry *entry = &entries[index];
 
 		if (entry->key == NULL) {
@@ -123,7 +123,7 @@ ObjectString *tableFindString(Table *table, const char *chars, int length, uint3
 		return NULL;
 
 	uint32_t index = hash & (table->capacity - 1);
-	for (;;) {
+	while(true) {
 		Entry *entry = &table->entries[index];
 		if (entry->key == NULL) {
 			// Stop if we find an empty non tombstone entry

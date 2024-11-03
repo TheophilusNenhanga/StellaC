@@ -34,7 +34,7 @@ static bool isIdentifierStarter(char c) {
 static bool isAlpha(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
 
 static void skipWhitespace() {
-	for (;;) {
+	while(true) {
 		char c = peek();
 		switch (c) {
 			case ' ':

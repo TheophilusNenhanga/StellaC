@@ -385,7 +385,7 @@ static InterpretResult run() {
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define READ_SHORT() (frame->ip += 2, (uint16_t) ((frame->ip[-2] << 8) | frame->ip[-1]))
 
-	for (;;) {
+	while(true) {
 #ifdef DEBUG_TRACE_EXECUTION
 		printf("        ");
 		for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
@@ -765,10 +765,13 @@ static InterpretResult run() {
 			case OP_TABLE: {
 				uint16_t elementCount = READ_SHORT();
 				ObjectTable *table = newTable(elementCount);
-				table->size = elementCount;
 				for (int i = elementCount - 1; i >= 0; i--) {
 					Value value = pop();
 					Value key = pop();
+					if (!objectTableSet(table, key, value)) {
+						runtimeError("Failed to set table entry.");
+						return INTERPRET_RUNTIME_ERROR;
+					}
 				}
 				push(OBJECT_VAL(table));
 				break;
@@ -1014,5 +1017,3 @@ InterpretResult interpret(const char *source) {
 
 	return run();
 }
-
-// Store ip in a local variable to improve performance

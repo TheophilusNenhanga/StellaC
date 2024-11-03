@@ -23,7 +23,7 @@ static Object *allocateObject(size_t size, ObjectType type) {
 	vm.objects = object;
 
 #ifdef DEBUG_LOG_GC
-	printf("%p allocate %zu for %d\n", (void *) object, size, type);
+	printf("%p allocate %zu for %d\n", (void *) object, size, type); // TODO: GET THE NAME OF ENUM FIELD
 #endif
 
 	return object;
@@ -119,7 +119,7 @@ void printObject(Value value) {
 			break;
 		}
 		case OBJECT_STRING: {
-			printf("\"%s\"", AS_CSTRING(value));
+			printf("%s", AS_CSTRING(value));
 			break;
 		}
 		case OBJECT_FUNCTION: {
@@ -157,7 +157,7 @@ void printObject(Value value) {
 	}
 }
 
-ObjectString *takeString(const char *chars, int length) {
+ObjectString *takeString(char *chars, int length) {
 	uint32_t hash = hashBytes(chars, length);
 
 	ObjectString *interned = tableFindString(&vm.strings, chars, length, hash);
@@ -175,6 +175,7 @@ ObjectFunction *newFunction() {
 	function->name = NULL;
 	function->upvalueCount = 0;
 	initChunk(&function->chunk);
+	function->object.hash = hashBytes(&function, sizeof(*function));
 	return function;
 }
 
@@ -189,6 +190,7 @@ ObjectNative *newNative(NativeFn function, int arity) {
 	ObjectNative *native = ALLOCATE_OBJECT(ObjectNative, OBJECT_NATIVE);
 	native->function = function;
 	native->arity = arity;
+	native->object.hash = hashBytes(&native, sizeof(*native));
 	return native;
 }
 
@@ -226,35 +228,179 @@ ObjectArray *growArray(ObjectArray *array) {
 
 ObjectTable *newTable(int elementCount) {
 	ObjectTable *table = ALLOCATE_OBJECT(ObjectTable, OBJECT_TABLE);
-	table->capacity = calculateCollectionCapacity(elementCount);
+	if (elementCount < 8) {
+		table->capacity = 8;
+	} else {
+		table->capacity = calculateCollectionCapacity(elementCount);
+	}
 	table->size = 0;
 	table->values = ALLOCATE(ValueEntry, table->capacity);
+	for (int i = 0; i < table->capacity; i++) {
+		table->values[i].key = NIL_VAL;
+		table->values[i].value = NIL_VAL;
+		table->values[i].isOccupied = false;
+	}
 	return table;
 }
 
-static ValueEntry *findEntry(ValueEntry *entries, int capacity, Value *key) {}
+static ValueEntry *findEntry(ValueEntry *entries, int capacity, Value key) {
+	uint64_t hash;
+	if (IS_NUMBER(key)) {
+		hash = (uint64_t) AS_NUMBER(key);
+	} else if (IS_BOOL(key)) {
+		hash = AS_BOOL(key) ? 1 : 0;
+	} else if (IS_NIL(key)) {
+		hash = 0;
+	} else if (IS_OBJECT(key)) {
+		hash = AS_OBJECT(key)->hash;
+	} else {
+		return NULL;
+	}
+	uint64_t index = hash & (capacity - 1);
+	ValueEntry *tombstone = NULL;
 
-static void adjustCapacity(ObjectTable *table, int capacity) {}
+	while (true) {
+		ValueEntry *entry = &entries[index];
+		if (!entry->isOccupied) {
+			if (IS_NIL(entry->value)) {
+				return tombstone != NULL ? tombstone : entry;
+			} else if (tombstone == NULL) {
+				tombstone = entry;
+			}
+		} else if (valuesEqual(entry->key, key)) {
+			return entry;
+		}
+		index = (index + 1) & (capacity - 1);
+	}
+}
 
-bool objectTableSet(ObjectTable *table, Value *key, Value value) { return true; }
+static bool adjustCapacity(ObjectTable *table, int capacity) {
+	ValueEntry *values = ALLOCATE(ValueEntry, capacity);
+	for (int i = 0; i < capacity; i++) {
+		values[i].key = NIL_VAL;
+		values[i].value = NIL_VAL;
+		values[i].isOccupied = false;
+	}
 
-bool objectTableGet(ObjectTable *table, Value *key, Value *value) { return true; }
+	table->size = 0;
+	for (int i = 0; i < table->capacity; i++) {
+		ValueEntry *entry = &table->values[i];
+		if (!entry->isOccupied) {
+			continue;
+		}
 
-bool objectTableDelete(ObjectTable *table, Value *key) { return true; }
+		ValueEntry *dest = findEntry(values, capacity, entry->key);
+		if (dest == NULL) {
+			FREE_ARRAY(ValueEntry, values, capacity);
+			return false;
+		}
+		dest->key = entry->key;
+		dest->value = entry->value;
+		dest->isOccupied = true;
+		table->size++;
+	}
+	FREE_ARRAY(ValueEntry, table->values, table->capacity);
+	table->values = values;
+	table->capacity = capacity;
+	return true;
+}
+
+bool objectTableSet(ObjectTable *table, Value key, Value value) {
+	if (table->size + 1 > table->capacity * TABLE_MAX_LOAD) {
+		int capacity = GROW_CAPACITY(table->capacity);
+		if (!adjustCapacity(table, capacity))
+			return false;
+	}
+
+	ValueEntry *entry = findEntry(table->values, table->capacity, key);
+	if (entry == NULL) {
+		return false;
+	}
+	bool isNewKey = !entry->isOccupied;
+
+	if (isNewKey) {
+		table->size++;
+	}
+
+	entry->key = key;
+	entry->value = value;
+	entry->isOccupied = true;
+	return true;
+}
+
+bool objectTableGet(ObjectTable *table, Value key, Value *value) {
+	if (table->size == 0) {
+		return false;
+	}
+
+	ValueEntry *entry = findEntry(table->values, table->capacity, key);
+	if (!entry->isOccupied) {
+		return false;
+	}
+	*value = entry->value;
+	return true;
+}
+
+bool objectTableDelete(ObjectTable *table, Value key) {
+	if (table->size == 0) {
+		return false;
+	}
+
+	ValueEntry *entry = findEntry(table->values, table->capacity, key);
+	if (!entry->isOccupied) {
+		return false;
+	}
+	entry->key = NIL_VAL;
+	entry->value = BOOL_VAL(true); // tombstone
+	entry->isOccupied = false;
+	table->size--;
+	return true;
+}
 
 void objectTableRemoveWhite(ObjectTable *table) {
 	for (int i = 0; i < table->capacity; i++) {
 		ValueEntry *entry = &table->values[i];
-		if (entry->key != NIL_VAL && !AS_OBJECT(entry->key)->isMarked) { // TODO: test this
-			objectTableDelete(table, &entry->key);
+		if (entry->isOccupied && !AS_OBJECT(entry->key)->isMarked) {
+			objectTableDelete(table, entry->key);
 		}
 	}
 }
 
 void markObjectTable(ObjectTable *table) {
-	for (int i = 0; i < table->capacity; i++) {
-		ValueEntry *entry = &table->values[i];
-		markValue(entry->key);
-		markValue(entry->value);
+	if (table->values != NULL) {
+		for (int i = 0; i < table->capacity; i++) {
+			ValueEntry *entry = &table->values[i];
+			if (entry->isOccupied) {
+				markValue(entry->key);
+				markValue(entry->value);
+			}
+		}
+	}
+}
+
+void freeObjectTable(ObjectTable *table) {
+	FREE_ARRAY(ValueEntry, table->values, table->capacity);
+	FREE(ObjectTable, table);
+}
+
+bool isValidObject(Object *object) {
+	if (object == NULL)
+		return false;
+	if ((uintptr_t) object % sizeof(void *) != 0)
+		return false;
+	switch (object->type) {
+		case OBJECT_STRING:
+		case OBJECT_FUNCTION:
+		case OBJECT_NATIVE:
+		case OBJECT_CLOSURE:
+		case OBJECT_UPVALUE:
+		case OBJECT_CLASS:
+		case OBJECT_INSTANCE:
+		case OBJECT_BOUND_METHOD:
+		case OBJECT_ARRAY:
+		case OBJECT_TABLE:
+			return true;
+		default:
+			return false;
 	}
 }

@@ -84,6 +84,8 @@ Value valueType(int argCount, Value *args) {
 	}
 	if (IS_CLOSURE(value)) {
 		return OBJECT_VAL(copyString("<type function>", sizeof("<type function>") - 1));
+	}else {
+		return NIL_VAL;
+		// TODO: RUNTIME ERROR
 	}
-	// TODO: RUNTIME ERROR
 }

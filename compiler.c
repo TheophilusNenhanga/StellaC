@@ -137,7 +137,7 @@ static void errorAtCurrent(const char *message) { errorAt(&parser.current, messa
 
 static void advance() {
 	parser.previous = parser.current;
-	for (;;) {
+	while(true) {
 		parser.current = scanToken();
 		if (parser.current.type != TOKEN_ERROR)
 			break;
@@ -606,7 +606,7 @@ static void variable(bool canAssign) { namedVariable(parser.previous, canAssign)
 static Token syntheticToken(const char *text) {
 	Token token;
 	token.start = text;
-	token.length = strlen(text);
+	token.length = (int)strlen(text);
 	return token;
 }
 

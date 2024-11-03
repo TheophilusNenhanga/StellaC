@@ -1,4 +1,6 @@
 #include "memory.h"
+
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "compiler.h"
@@ -29,8 +31,11 @@ void *reallocate(void *pointer, size_t oldSize, size_t newSize) {
 	}
 
 	void *result = realloc(pointer, newSize); // When oldSize is zero this is equivalent to malloc
-	if (result == NULL)
+	if (result == NULL && newSize > 0) {
+		fprintf(stderr, "Out of Memory Error: Failed to allocate %zu bytes", newSize);
 		exit(1);
+	}
+
 	return result;
 }
 
@@ -121,6 +126,11 @@ static void blackenObject(Object *object) {
 		case OBJECT_NATIVE:
 		case OBJECT_STRING:
 			break;
+		case OBJECT_TABLE: {
+			ObjectTable *table = (ObjectTable *) object;
+			markObjectTable(table);
+			break;
+		}
 	}
 }
 
@@ -176,6 +186,12 @@ static void freeObject(Object *object) {
 			ObjectArray *array = (ObjectArray *) object;
 			FREE_ARRAY(Value, array->array, array->capacity);
 			FREE(ObjectArray, object);
+			break;
+		}
+		case OBJECT_TABLE: {
+			ObjectTable *table = (ObjectTable *) object;
+			freeObjectTable(table);
+			break;
 		}
 	}
 }
@@ -208,6 +224,7 @@ static void traceReferences() {
 static void sweep() {
 	Object *previous = NULL;
 	Object *object = vm.objects;
+
 	while (object != NULL) {
 		if (object->isMarked) {
 			object->isMarked = false;
@@ -216,6 +233,12 @@ static void sweep() {
 		} else {
 			Object *unreached = object;
 			object = object->next;
+
+			if (object != NULL && !isValidObject(object)) {
+				fprintf(stderr, "Invalid object pointer encountered during sweep");
+				exit(1);
+			}
+
 			if (previous != NULL) {
 				previous->next = object;
 			} else {

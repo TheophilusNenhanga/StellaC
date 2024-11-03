@@ -29,15 +29,15 @@ let iterations = 100000000;
 let compoundTime = testCompoundOperator(iterations);
 let assignmentTime = testBasicAssignment(iterations);
 
-print("Compound operator time:");
-print(compoundTime);
-print("Basic assignment time:");
-print(assignmentTime);
+println("Compound operator time:");
+println(compoundTime);
+println("Basic assignment time:");
+println(assignmentTime);
 
 if compoundTime < assignmentTime {
-    print("Compound operators are faster.");
+    println("Compound operators are faster.");
 } else if assignmentTime < compoundTime {
-    print("Basic assignment is faster.");
+    println("Basic assignment is faster.");
 } else {
-    print("Both methods took the same time.");
+    println("Both methods took the same time.");
 }

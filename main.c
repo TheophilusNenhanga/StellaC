@@ -43,10 +43,9 @@ static char *readFile(const char *path) {
 static void repl() {
 	char line[1024];
 	while (true) {
-		printf("> ");
+		printf("\n> ");
 
 		if (!fgets(line, sizeof(line), stdin)) {
-			printf("\n");
 			break;
 		}
 		interpret(line);

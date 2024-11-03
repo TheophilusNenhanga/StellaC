@@ -44,16 +44,16 @@ typedef enum {
 } ObjectType;
 
 struct Object {
-	ObjectType type;
-	uint32_t hash;
+	uint64_t hash;
 	Object *next;
 	bool isMarked;
+	ObjectType type;
 };
 
 struct ObjectString {
 	Object object;
-	int length;
 	char *chars;
+	int length;
 };
 
 typedef struct {
@@ -106,6 +106,7 @@ typedef struct {
 typedef struct {
 	Value key;
 	Value value;
+	bool isOccupied;
 }ValueEntry;
 
 typedef struct {
@@ -123,6 +124,8 @@ typedef struct {
 	int arity;
 } ObjectNative;
 
+bool isValidObject(Object* object);
+
 ObjectTable* newTable(int elementCount);
 ObjectArray *newArray(int elementCount);
 ObjectArray *growArray(ObjectArray *array);
@@ -133,15 +136,15 @@ ObjectNative *newNative(NativeFn function, int arity);
 ObjectFunction *newFunction();
 ObjectClass *newClass(ObjectString *name);
 ObjectInstance *newInstance(ObjectClass *klass);
-ObjectString *takeString(const char *chars, int length);
+ObjectString *takeString(char *chars, int length);
 ObjectString *copyString(const char *chars, int length);
 void printObject(Value value);
 
 
 void freeObjectTable(ObjectTable *table);
-bool objectTableSet(ObjectTable *table, Value *key, Value value);
-bool objectTableGet(ObjectTable *table, Value *key, Value *value);
-bool objectTableDelete(ObjectTable *table, Value *key);
+bool objectTableSet(ObjectTable *table, Value key, Value value);
+bool objectTableGet(ObjectTable *table, Value key, Value *value);
+bool objectTableDelete(ObjectTable *table, Value key);
 void objectTableRemoveWhite(ObjectTable *table);
 void markObjectTable(ObjectTable *table);
 
