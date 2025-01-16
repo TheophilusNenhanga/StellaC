@@ -82,7 +82,10 @@ static TokenType identifierType() {
 					case 'l':
 						return checkKeyword(2, 3, "ass", TOKEN_CLASS);
 					case 'o':
-						return checkKeyword(2, 6, "ntinue", TOKEN_CONTINUE);
+						if (scanner.start[2] == 'n') {
+							return checkKeyword(2, 6, "ntinue", TOKEN_CONTINUE);
+						}
+						return TOKEN_CO;
 					default:;
 				}
 			}
@@ -145,6 +148,8 @@ static TokenType identifierType() {
 			return checkKeyword(1, 2, "se", TOKEN_USE);
 		case 'p':
 			return checkKeyword(1, 2, "ub", TOKEN_PUB);
+		case 'y':
+			return checkKeyword(1, 4, "ield", TOKEN_YIELD);
 		default:;
 	}
 
