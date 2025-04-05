@@ -13,14 +13,19 @@ typedef struct ObjectString ObjectString;
 #define TAG_NIL 1 // 01.
 #define TAG_FALSE 2 // 10.
 #define TAG_TRUE 3 // 11.
+#define TAG_INT32_BIT ((uint64_t) 1<<48)
 typedef uint64_t Value;
 
-#define IS_NUMBER(value) (((value) & QNAN) != QNAN)
+#define IS_INT(value) (((value) & (QNAN | SIGN_BIT | TAG_INT32_BIT)) == (QNAN | TAG_INT32_BIT))
+#define IS_FLOAT(value) (((value) & QNAN) != QNAN)
 #define IS_NIL(value) ((value) == NIL_VAL)
 #define IS_BOOL(value) (((value) | 1) == TRUE_VAL)
 #define IS_CRUX_OBJECT(value) (((value) & (QNAN | SIGN_BIT)) == (QNAN | SIGN_BIT))
 
-#define AS_NUMBER(value) valueToNum(value)
+// #define IS_NUMBER(value) (IS_INT(value) || IS_FLOAT(value))
+
+#define AS_INT(value) ((int32_t)((value) & 0xFFFFFFFF))
+#define AS_FLOAT(value) valueToNum(value)
 #define AS_BOOL(value) ((value) == TRUE_VAL)
 #define AS_CRUX_OBJECT(value) ((Object *) (uintptr_t) ((value) & ~(SIGN_BIT | QNAN)))
 
@@ -29,18 +34,25 @@ typedef uint64_t Value;
 #define FALSE_VAL ((Value) (uint64_t) (QNAN | TAG_FALSE))
 #define TRUE_VAL ((Value) (uint64_t) (QNAN | TAG_TRUE))
 #define NIL_VAL ((Value) (uint64_t) (QNAN | TAG_NIL))
-#define NUMBER_VAL(num) numToValue(num)
+#define FLOAT_VAL(num) numToValue(num)
+#define INT_VAL(integer) ((Value)(QNAN | TAG_INT32_BIT | ((uint64_t)(integer) & 0xFFFFFFFF)))
 
 static inline double valueToNum(Value value) {
-	double num;
-	memcpy(&num, &value, sizeof(Value));
-	return num;
+	union {
+		Value v;
+		double d;
+	} u;
+	u.v = value;
+	return u.d;
 }
 
 static inline Value numToValue(double num) {
-	Value value;
-	memcpy(&value, &num, sizeof(double));
-	return value;
+	union {
+		double d;
+		Value v;
+	} u;
+	u.d = num;
+	return u.v;
 }
 
 typedef struct {

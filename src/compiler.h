@@ -38,7 +38,7 @@ typedef enum {
 	PREC_PRIMARY
 } Precedence;
 
-typedef enum { COMPOUND_OP_PLUS, COMPOUND_OP_MINUS, COMPOUND_OP_STAR, COMPOUND_OP_SLASH } CompoundOp;
+typedef enum { COMPOUND_OP_PLUS, COMPOUND_OP_MINUS, COMPOUND_OP_STAR, COMPOUND_OP_SLASH, COMPOUND_OP_BACK_SLASH, COMPOUND_OP_PERCENT } CompoundOp;
 
 typedef void (*ParseFn)(bool canAssign);
 

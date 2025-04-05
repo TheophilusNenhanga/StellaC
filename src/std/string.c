@@ -11,8 +11,8 @@ static char toUpper(char c) { return c + ('A' - 'a'); }
 
 static char toLower(char c) { return c + ('a' - 'A'); }
 
-void buildPrefixTable(const char *pattern, uint64_t patternLength, uint64_t *prefixTable) {
-	uint64_t j = 0;
+void buildPrefixTable(const char *pattern, uint32_t patternLength, uint32_t *prefixTable) {
+	uint32_t j = 0;
 	prefixTable[0] = 0;
 
 	for (int i = 1; i < patternLength; i++) {
@@ -53,12 +53,12 @@ ObjectResult* stringLastMethod(VM *vm, int argCount, Value *args) {
 ObjectResult* stringGetMethod(VM *vm, int argCount, Value *args) {
 	Value value = args[0];
 	Value index = args[1];
-	if (!IS_NUMBER(index)) {
+	if (!IS_INT(index)) {
 		return stellaErr(vm, newError(vm, copyString(vm, "<index> must be of type 'number'.", 33), TYPE, false));
 
 	}
 	ObjectString *string = AS_CRUX_STRING(value);
-	if (AS_NUMBER(index) < 0 || AS_NUMBER(index) > (double) string->length) {
+	if (AS_INT(index) < 0 || AS_INT(index) > (double) string->length) {
 		return stellaErr(vm, newError(
 				vm, copyString(vm, "<index> must be a non negative number that is less than the length of the string.", 81),
 				INDEX_OUT_OF_BOUNDS, false));
@@ -70,7 +70,7 @@ ObjectResult* stringGetMethod(VM *vm, int argCount, Value *args) {
 				vm, copyString(vm, "'string' must have at least one character to get a character.", 61), VALUE, false));
 	}
 
-	return stellaOk(vm, OBJECT_VAL(copyString(vm, &string->chars[(uint64_t) AS_NUMBER(index)], 1)));
+	return stellaOk(vm, OBJECT_VAL(copyString(vm, &string->chars[(uint32_t) AS_INT(index)], 1)));
 }
 
 ObjectResult* stringUpperMethod(VM *vm, int argCount, Value *args) {
@@ -79,7 +79,7 @@ ObjectResult* stringUpperMethod(VM *vm, int argCount, Value *args) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Cannot make empty string uppercase.", 35), VALUE, false));
 	}
 
-	for (uint64_t i = 0; i < string->length; i++) {
+	for (uint32_t i = 0; i < string->length; i++) {
 		if (isLower(string->chars[i])) {
 			string->chars[i] = toUpper(string->chars[i]);
 		}
@@ -94,7 +94,7 @@ ObjectResult* stringLowerMethod(VM *vm, int argCount, Value *args) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Cannot make empty string lowercase.", 35), VALUE, false));
 	}
 
-	for (uint64_t i = 0; i < string->length; i++) {
+	for (uint32_t i = 0; i < string->length; i++) {
 		if (isUpper(string->chars[i])) {
 			string->chars[i] = toLower(string->chars[i]);
 		}
@@ -109,12 +109,12 @@ ObjectResult* stringStripMethod(VM *vm, int argCount, Value *args) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Cannot strip whitespace from an empty string.", 45), VALUE, false));
 	}
 
-	uint64_t start = 0;
+	uint32_t start = 0;
 	while (start < string->length && isSpace(string->chars[start])) {
 		start++;
 	}
 
-	uint64_t end = string->length;
+	uint32_t end = string->length;
 	while (end > start && isSpace(string->chars[end - 1])) {
 		end--;
 	}
@@ -135,16 +135,16 @@ ObjectResult* stringSubstringMethod(VM *vm, int argCount, Value *args) {
 
 	}
 
-	if (!IS_NUMBER(args[1])) {
-		return stellaErr(vm, newError(vm, copyString(vm, "Cannot get substring of empty string.", 37), VALUE, false));
+	if (!IS_INT(args[1])) {
+		return stellaErr(vm, newError(vm, copyString(vm, "<start> index must be of type 'int'.", 36), VALUE, false));
 
 	}
-	if (!IS_NUMBER(args[2])) {
-		return stellaErr(vm, newError(vm, copyString(vm, "<end> index should be of type 'number'.", 39), VALUE, false));
+	if (!IS_INT(args[2])) {
+		return stellaErr(vm, newError(vm, copyString(vm, "<end> index must be of type 'int'.", 34), VALUE, false));
 	}
 
-	uint64_t startIndex = AS_NUMBER(args[1]);
-	uint64_t endIndex = AS_NUMBER(args[2]);
+	uint32_t startIndex = AS_INT(args[1]);
+	uint32_t endIndex = AS_INT(args[2]);
 	if (startIndex > string->length || endIndex > string->length || startIndex > endIndex) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Index out of bounds.", 20), INDEX_OUT_OF_BOUNDS, false));
 	}
@@ -179,10 +179,10 @@ ObjectResult* stringSplitMethod(VM *vm, int argCount, Value *args) {
 		return stellaOk(vm, OBJECT_VAL(resultArray));
 	}
 
-	uint64_t stringLength = string->length;
-	uint64_t delimiterLength = delimiter->length;
+	uint32_t stringLength = string->length;
+	uint32_t delimiterLength = delimiter->length;
 
-	uint64_t *prefixTable = ALLOCATE(vm, uint64_t, delimiterLength);
+	uint32_t *prefixTable = ALLOCATE(vm, uint32_t, delimiterLength);
 	if (prefixTable == NULL) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Memory allocation failed.", 25), MEMORY, false));
 
@@ -193,11 +193,11 @@ ObjectResult* stringSplitMethod(VM *vm, int argCount, Value *args) {
 	// initial guess of splits size
 	ObjectArray *resultArray = newArray(vm, stringLength / (delimiterLength + 1) + 1);
 
-	uint64_t lastSplitIndex = 0;
-	uint64_t j = 0;
-	uint64_t lastAddIndex = 0;
+	uint32_t lastSplitIndex = 0;
+	uint32_t j = 0;
+	uint32_t lastAddIndex = 0;
 
-	for (uint64_t i = 0; i < stringLength; i++) {
+	for (uint32_t i = 0; i < stringLength; i++) {
 		while (j > 0 && string->chars[i] != delimiter->chars[j]) {
 			j = prefixTable[j - 1];
 		}
@@ -207,7 +207,7 @@ ObjectResult* stringSplitMethod(VM *vm, int argCount, Value *args) {
 		}
 
 		if (j == delimiterLength) {
-			uint64_t substringLength = i - lastSplitIndex - delimiterLength + 1;
+			uint32_t substringLength = i - lastSplitIndex - delimiterLength + 1;
 
 			char *substringChars = ALLOCATE(vm, char, substringLength + 1);
 			if (substringChars == NULL) {
@@ -231,7 +231,7 @@ ObjectResult* stringSplitMethod(VM *vm, int argCount, Value *args) {
 	}
 
 	if (lastSplitIndex < stringLength) {
-		uint64_t substringLength = stringLength - lastSplitIndex;
+		uint32_t substringLength = stringLength - lastSplitIndex;
 		char *substringChars = ALLOCATE(vm, char, substringLength + 1);
 
 		if (substringChars == NULL) {
@@ -273,10 +273,10 @@ ObjectResult* stringContainsMethod(VM *vm, int argCount, Value *args) {
 		return stellaOk(vm, BOOL_VAL(false));
 	}
 
-	uint64_t stringLength = string->length;
-	uint64_t goalLength = goal->length;
+	uint32_t stringLength = string->length;
+	uint32_t goalLength = goal->length;
 
-	uint64_t *prefixTable = ALLOCATE(vm, uint64_t, goalLength);
+	uint32_t *prefixTable = ALLOCATE(vm, uint32_t, goalLength);
 
 	if (prefixTable == NULL) {
 		return stellaErr(vm,
@@ -285,8 +285,8 @@ ObjectResult* stringContainsMethod(VM *vm, int argCount, Value *args) {
 
 	buildPrefixTable(goal->chars, goalLength, prefixTable);
 
-	uint64_t j = 0;
-	for (uint64_t i = 0; i < stringLength; i++) {
+	uint32_t j = 0;
+	for (uint32_t i = 0; i < stringLength; i++) {
 		while (j > 0 && string->chars[i] != goal->chars[j]) {
 			j = prefixTable[j - 1];
 		}
@@ -328,11 +328,11 @@ ObjectResult* stringReplaceMethod(VM *vm, int argCount, Value *args) {
 
 	}
 
-	uint64_t stringLength = string->length;
-	uint64_t goalLength = goal->length;
-	uint64_t replacementLength = replacement->length;
+	uint32_t stringLength = string->length;
+	uint32_t goalLength = goal->length;
+	uint32_t replacementLength = replacement->length;
 
-	uint64_t *prefixTable = ALLOCATE(vm, uint64_t, goalLength);
+	uint32_t *prefixTable = ALLOCATE(vm, uint32_t, goalLength);
 	if (prefixTable == NULL) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Memory allocation failed.", 25), MEMORY, false));
 
@@ -340,16 +340,16 @@ ObjectResult* stringReplaceMethod(VM *vm, int argCount, Value *args) {
 
 	buildPrefixTable(goal->chars, goalLength, prefixTable);
 
-	uint64_t matchCount = 0;
-	uint64_t *matchIndices = ALLOCATE(vm, uint64_t, stringLength);
+	uint32_t matchCount = 0;
+	uint32_t *matchIndices = ALLOCATE(vm, uint32_t, stringLength);
 	if (matchIndices == NULL) {
 		free(prefixTable);
 		return stellaErr(vm, newError(vm, copyString(vm, "Memory allocation failed.", 25), MEMORY, false));
 
 	}
 
-	uint64_t j = 0;
-	for (uint64_t i = 0; i < stringLength; i++) {
+	uint32_t j = 0;
+	for (uint32_t i = 0; i < stringLength; i++) {
 		while (j > 0 && string->chars[i] != goal->chars[j]) {
 			j = prefixTable[j - 1];
 		}
@@ -368,7 +368,7 @@ ObjectResult* stringReplaceMethod(VM *vm, int argCount, Value *args) {
 		return stellaOk(vm, OBJECT_VAL(string));
 	}
 
-	uint64_t newStringLength = stringLength + (replacementLength - goalLength) * matchCount;
+	uint32_t newStringLength = stringLength + (replacementLength - goalLength) * matchCount;
 
 	char *newStringChars = ALLOCATE(vm, char, newStringLength + 1);
 	if (newStringChars == NULL) {
@@ -378,10 +378,10 @@ ObjectResult* stringReplaceMethod(VM *vm, int argCount, Value *args) {
 
 	}
 
-	uint64_t writeIndex = 0;
-	uint64_t lastCopyIndex = 0;
-	for (uint64_t i = 0; i < matchCount; i++) {
-		uint64_t copyLength = matchIndices[i] - lastCopyIndex;
+	uint32_t writeIndex = 0;
+	uint32_t lastCopyIndex = 0;
+	for (uint32_t i = 0; i < matchCount; i++) {
+		uint32_t copyLength = matchIndices[i] - lastCopyIndex;
 		memcpy(newStringChars + writeIndex, string->chars + lastCopyIndex, copyLength);
 		writeIndex += copyLength;
 
@@ -391,7 +391,7 @@ ObjectResult* stringReplaceMethod(VM *vm, int argCount, Value *args) {
 		lastCopyIndex = matchIndices[i] + goalLength;
 	}
 
-	uint64_t remainingLength = stringLength - lastCopyIndex;
+	uint32_t remainingLength = stringLength - lastCopyIndex;
 	memcpy(newStringChars + writeIndex, string->chars + lastCopyIndex, remainingLength);
 	writeIndex += remainingLength;
 
@@ -423,7 +423,7 @@ ObjectResult* stringStartsWithMethod(VM *vm, int argCount, Value *args) {
 		return stellaOk(vm, BOOL_VAL(false));
 	}
 
-	for (uint64_t i = 0; i < goal->length; i++) {
+	for (uint32_t i = 0; i < goal->length; i++) {
 		if (string->chars[i] != goal->chars[i]) {
 			return stellaOk(vm, BOOL_VAL(false));
 		}
@@ -449,8 +449,8 @@ ObjectResult* stringEndsWithMethod(VM *vm, int argCount, Value *args) {
 		return stellaOk(vm, BOOL_VAL(false));
 	}
 
-	uint64_t stringStart = string->length - goal->length;
-	for (uint64_t i = 0; i < goal->length; i++) {
+	uint32_t stringStart = string->length - goal->length;
+	for (uint32_t i = 0; i < goal->length; i++) {
 		if (string->chars[stringStart + i] != goal->chars[i]) {
 			return stellaOk(vm, BOOL_VAL(false));
 		}

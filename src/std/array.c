@@ -32,19 +32,19 @@ ObjectResult* arrayPopMethod(VM *vm, int argCount, Value *args) {
 ObjectResult* arrayInsertMethod(VM *vm, int argCount, Value *args) {
 	ObjectArray *array = AS_CRUX_ARRAY(args[0]);
 
-	if (!IS_NUMBER(args[2])) {
+	if (!IS_INT(args[2])) {
 		return stellaErr(vm, newError(vm, copyString(vm, "<index> must be of type 'number'.", 33), TYPE, false));
 	}
 
 	Value toInsert = args[1];
-	uint64_t insertAt = (uint64_t) AS_NUMBER(args[2]);
+	uint32_t insertAt = AS_INT(args[2]);
 
 	if (insertAt > array->size) {
 		return stellaErr(vm, newError(vm, copyString(vm, "<index> is out of bounds.", 25), INDEX_OUT_OF_BOUNDS, false));
 	}
 
 	if (ensureCapacity(vm, array, array->size + 1)) {
-		for (uint64_t i = array->size; i > insertAt; i--) {
+		for (uint32_t i = array->size; i > insertAt; i--) {
 			array->array[i] = array->array[i - 1];
 		}
 
@@ -59,11 +59,11 @@ ObjectResult* arrayInsertMethod(VM *vm, int argCount, Value *args) {
 ObjectResult* arrayRemoveAtMethod(VM *vm, int argCount, Value *args) {
 	ObjectArray *array = AS_CRUX_ARRAY(args[0]);
 
-	if (!IS_NUMBER(args[1])) {
+	if (!IS_INT(args[1])) {
 		return stellaErr(vm, newError(vm, copyString(vm, "<index> must be of type 'number'.", 33), TYPE, false));
 	}
 
-	uint64_t removeAt = (uint64_t) AS_NUMBER(args[1]);
+	uint32_t removeAt = AS_INT(args[1]);
 
 	if (removeAt >= array->size) {
 		return stellaErr(vm, newError(vm, copyString(vm, "<index> is out of bounds.", 25), INDEX_OUT_OF_BOUNDS, false));
@@ -71,7 +71,7 @@ ObjectResult* arrayRemoveAtMethod(VM *vm, int argCount, Value *args) {
 
 	Value removedElement = array->array[removeAt];
 
-	for (uint64_t i = removeAt; i < array->size - 1; i++) {
+	for (uint32_t i = removeAt; i < array->size - 1; i++) {
 		array->array[i] = array->array[i + 1];
 	}
 
@@ -88,14 +88,14 @@ ObjectResult* arrayConcatMethod(VM *vm, int argCount, Value *args) {
 
 	ObjectArray *targetArray = AS_CRUX_ARRAY(args[1]);
 
-	uint64_t combinedSize = targetArray->size + array->size;
+	uint32_t combinedSize = targetArray->size + array->size;
 	if (combinedSize > MAX_ARRAY_SIZE) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Size of resultant array out of bounds.", 38), INDEX_OUT_OF_BOUNDS, false));
 	}
 
 	ObjectArray *resultArray = newArray(vm, combinedSize);
 
-	for (uint64_t i = 0; i < combinedSize; i++) {
+	for (uint32_t i = 0; i < combinedSize; i++) {
 		resultArray->array[i] = (i < array->size) ? array->array[i] : targetArray->array[i - array->size];
 	}
 
@@ -107,16 +107,16 @@ ObjectResult* arrayConcatMethod(VM *vm, int argCount, Value *args) {
 ObjectResult* arraySliceMethod(VM *vm, int argCount, Value *args) {
 	ObjectArray *array = AS_CRUX_ARRAY(args[0]);
 
-	if (!IS_NUMBER(args[1])) {
+	if (!IS_INT(args[1])) {
 		return stellaErr(vm, newError(vm, copyString(vm, "<start_index> must be of type 'number'.", 39), TYPE, false));
 	}
 
-	if (!IS_NUMBER(args[2])) {
+	if (!IS_INT(args[2])) {
 		return stellaErr(vm,  newError(vm, copyString(vm, "<end_index> must be of type 'number'.", 37), TYPE, false));
 	}
 
-	uint64_t startIndex = (uint64_t) AS_NUMBER(args[1]);
-	uint64_t endIndex = (uint64_t) AS_NUMBER(args[2]);
+	uint32_t startIndex = IS_INT(args[1]);
+	uint32_t endIndex = IS_INT(args[2]);
 
 	if (startIndex > array->size) {
 		return stellaErr(vm, newError(vm, copyString(vm, "<start_index> out of bounds.", 28), INDEX_OUT_OF_BOUNDS, false));
@@ -150,11 +150,11 @@ ObjectResult* arrayReverseMethod(VM *vm, int argCount, Value *args) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Failed to allocate memory when reversing array.", 47), MEMORY, false));
 	}
 
-	for (uint64_t i = 0; i < array->size; i++) {
+	for (uint32_t i = 0; i < array->size; i++) {
 		values[i] = array->array[i];
 	}
 
-	for (uint64_t i = 0; i < array->size; i++) {
+	for (uint32_t i = 0; i < array->size; i++) {
 		array->array[i] = values[array->size - 1 - i];
 	}
 
@@ -167,9 +167,9 @@ ObjectResult* arrayIndexOfMethod(VM *vm, int argCount, Value *args) {
 	ObjectArray *array = AS_CRUX_ARRAY(args[0]);
 	Value target = args[1];
 
-	for (uint64_t i = 0; i < array->size; i++) {
+	for (uint32_t i = 0; i < array->size; i++) {
 		if (valuesEqual(target, array->array[i])) {
-			return stellaOk(vm, NUMBER_VAL(i));
+			return stellaOk(vm, INT_VAL(i));
 		}
 	}
 	return stellaErr(vm, newError(vm, copyString(vm, "Value could not be found in the array.", 38), VALUE, false));
@@ -179,7 +179,7 @@ Value arrayContainsMethod(VM *vm, int argCount, Value *args) {
 	ObjectArray *array = AS_CRUX_ARRAY(args[0]);
 	Value target = args[1];
 
-	for (uint64_t i = 0; i < array->size; i++) {
+	for (uint32_t i = 0; i < array->size; i++) {
 		if (valuesEqual(target, array->array[i])) {
 			return BOOL_VAL(true);
 		}
@@ -190,7 +190,7 @@ Value arrayContainsMethod(VM *vm, int argCount, Value *args) {
 Value arrayClearMethod(VM *vm, int argCount, Value *args) {
 	ObjectArray *array = AS_CRUX_ARRAY(args[0]);
 
-	for (uint64_t i = 0; i < array->size; i++) {
+	for (uint32_t i = 0; i < array->size; i++) {
 		array->array[i] = NIL_VAL;
 	}
 	array->size = 0;
@@ -210,13 +210,12 @@ Value arrayEqualsMethod(VM *vm, int argCount, Value *args) {
 		return BOOL_VAL(false);
 	}
 
-	for (uint64_t i = 0; i < array->size; i++) {
+	for (uint32_t i = 0; i < array->size; i++) {
 		if (!valuesEqual(array->array[i], targetArray->array[i])) {
 			return BOOL_VAL(false);
 		}
 	}
 
 	return BOOL_VAL(true);
-
 }
 

@@ -23,15 +23,6 @@ static FILE *getChannel(const char *channel) {
 
 void valuePrint(Value value);
 
-void printNumber(Value value) {
-	double number = AS_NUMBER(value);
-	if (number == (int) number) {
-		printf("%.0f", number);
-	} else {
-		printf("%lf", number);
-	}
-}
-
 void printArray(ObjectArray *array) {
 	printf("[");
 	for (int i = 0; i < array->size; i++) {
@@ -79,8 +70,10 @@ void valuePrint(Value value) {
 		printf(AS_BOOL(value) ? "true" : "false");
 	} else if (IS_NIL(value)) {
 		printf("nil");
-	} else if (IS_NUMBER(value)) {
-		printNumber(value);
+	} else if (IS_INT(value)) {
+		printf("%d", AS_INT(value));
+	} else if (IS_FLOAT(value)) {
+		printf("%f", AS_FLOAT(value));
 	} else if (IS_CRUX_ARRAY(value)) {
 		printArray(AS_CRUX_ARRAY(value));
 	} else if (IS_CRUX_TABLE(value)) {
@@ -215,11 +208,11 @@ ObjectResult* scanlnFromFunction(VM *vm, int argCount, Value *args) {
 
 ObjectResult* nscanFunction(VM *vm, int argCount, Value *args) {
 
-	if (!IS_NUMBER(args[0])) {
+	if (!IS_INT(args[0])) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Number of characters must be a number.", 38), TYPE, false));
 	}
 
-	int n = (int) AS_NUMBER(args[0]);
+	int32_t n = AS_INT(args[0]);
 	if (n <= 0) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Number of characters must be positive.", 38), VALUE, false));
 	}
@@ -259,8 +252,8 @@ ObjectResult* nscanFromFunction(VM *vm, int argCount, Value *args) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Channel must be a string.", 25), TYPE, false));
 	}
 
-	if (!IS_NUMBER(args[1])) {
-		return stellaErr(vm, newError(vm, copyString(vm, "Number of characters must be a number.", 38), TYPE, false));
+	if (!IS_INT(args[1])) {
+		return stellaErr(vm, newError(vm, copyString(vm, "<char_count> must be of type 'int'.", 38), TYPE, false));
 	}
 
 	const char *channel = AS_C_STRING(args[0]);
@@ -269,7 +262,7 @@ ObjectResult* nscanFromFunction(VM *vm, int argCount, Value *args) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Invalid channel specified.", 26), VALUE, false));
 	}
 
-	int n = (int) AS_NUMBER(args[1]);
+	int32_t n = AS_INT(args[1]);
 	if (n <= 0) {
 		return stellaErr(vm, newError(vm, copyString(vm, "Number of characters must be positive.", 38), VALUE, false));
 	}

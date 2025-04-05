@@ -28,7 +28,8 @@ jobs:
             platform: windows
             arch: amd64
             artifact_name: crux.exe
-            binary_path: build/Release/crux.exe
+            binary_path: build/crux.exe
+            cmake_generator: "MinGW Makefiles"
             cmake_flags: ""
             
           - os: macos-latest
@@ -50,14 +51,50 @@ jobs:
       
       - name: Set up CMake
         uses: lukka/get-cmake@latest
-      
-      - name: Build
+
+      - name: Install GCC (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc g++
+          echo "CC=gcc" >> $GITHUB_ENV
+          echo "CXX=g++" >> $GITHUB_ENV
+
+      - name: Setup GCC (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install gcc
+          echo "CC=gcc" >> $GITHUB_ENV
+          echo "CXX=g++" >> $GITHUB_ENV    
+
+      - name: Install MinGW (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+
+      - name: Setup GCC environment (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "CC=gcc" >> $env:GITHUB_ENV
+          echo "CXX=g++" >> $env:GITHUB_ENV
+
+      - name: Build Linux/macOS
+        if: matrix.os != 'windows-latest'
         run: |
           mkdir build
           cd build
           cmake -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_flags }} ../src
           cmake --build . --config Release
-          
+
+      - name: Build Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir build
+          cd build
+          cmake -G "${{ matrix.cmake_generator }}" -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_flags }} ../src
+          cmake --build . --config Release
+
       - name: Rename binary
         run: |
           if [ "${{ matrix.platform }}" = "windows" ]; then
@@ -80,7 +117,7 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-        
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:

@@ -164,8 +164,10 @@ static void fileWriteValue(Value value, FILE *file) {
 			fprintf(file, AS_BOOL(value) ? "true" : "false");
 		} else if (IS_NIL(value)) {
 			fprintf(file, "nil");
-		} else if (IS_NUMBER(value)) {
-			fprintf(file, "%g", AS_NUMBER(value));
+		}else if (IS_INT(value)) {
+			fprintf(file, "%d", AS_INT(value));
+		} else if (IS_FLOAT(value)) {
+			fprintf(file, "%g", AS_FLOAT(value));
 		} else if (IS_CRUX_OBJECT(value)) {
 			switch (OBJECT_TYPE(value)) {
 				case OBJECT_STRING:
@@ -417,6 +419,18 @@ static int fileDisassembleInstruction(Chunk *chunk, int offset, FILE *file) {
 			return fileSimpleInstruction("OP_SET_GLOBAL_PLUS", offset, file);
 		case OP_SET_GLOBAL_MINUS:
 			return fileSimpleInstruction("OP_SET_GLOBAL_MINUS", offset, file);
+		case OP_SET_GLOBAL_INT_DIVIDE:
+			return fileSimpleInstruction("OP_SET_GLOBAL_INT_DIVIDE", offset, file);
+		case OP_SET_GLOBAL_MODULUS:
+			return fileSimpleInstruction("OP_SET_GLOBAL_MODULUS", offset, file);
+		case OP_SET_LOCAL_INT_DIVIDE:
+			return fileSimpleInstruction("OP_SET_LOCAL_INT_DIVIDE", offset, file);
+		case OP_SET_LOCAL_MODULUS:
+			return fileSimpleInstruction("OP_SET_LOCAL_MODULUS", offset, file);
+		case OP_SET_UPVALUE_INT_DIVIDE:
+			return fileSimpleInstruction("OP_SET_UPVALUE_INT_DIVIDE", offset, file);
+		case OP_SET_UPVALUE_MODULUS:
+			return fileSimpleInstruction("OP_SET_UPVALUE_MODULUS", offset, file);
 		case OP_ANON_FUNCTION:
 			return fileConstantInstruction("OP_ANON_FUNCTION", chunk, offset, file);
 		case OP_USE: {
@@ -611,6 +625,24 @@ int disassembleInstruction(Chunk *chunk, int offset) {
 		}
 		case OP_SET_GLOBAL_MINUS: {
 			return simpleInstruction("OP_SET_GLOBAL_MINUS", offset);
+		}
+		case OP_SET_GLOBAL_INT_DIVIDE: {
+			return simpleInstruction("OP_SET_GLOBAL_INT_DIVIDE", offset);
+		}
+		case OP_SET_GLOBAL_MODULUS: {
+			return simpleInstruction("OP_SET_GLOBAL_MODULUS", offset);
+		}
+		case OP_SET_LOCAL_INT_DIVIDE: {
+			return simpleInstruction("OP_SET_LOCAL_INT_DIVIDE", offset);
+		}
+		case OP_SET_LOCAL_MODULUS: {
+			return simpleInstruction("OP_SET_LOCAL_MODULUS", offset);
+		}
+		case OP_SET_UPVALUE_INT_DIVIDE: {
+			return simpleInstruction("OP_SET_UPVALUE_INT_DIVIDE", offset);
+		}
+		case OP_SET_UPVALUE_MODULUS: {
+			return simpleInstruction("OP_SET_UPVALUE_MODULUS", offset);
 		}
 		case OP_ANON_FUNCTION: {
 			return constantInstruction("OP_ANON_FUNCTION", chunk, offset);

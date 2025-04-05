@@ -1,5 +1,6 @@
 #include "scanner.h"
 
+#include <math.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -388,6 +389,9 @@ Token scanToken() {
 		case '/':
 			return makeToken(match('=') ? TOKEN_SLASH_EQUAL : TOKEN_SLASH);
 		case '\\':
+			if (match('=')) {
+				return makeToken(TOKEN_BACK_SLASH_EQUAL);
+			}
 			return makeToken(TOKEN_BACKSLASH);
 		case '*':
 			if (match('*')) {
@@ -398,6 +402,9 @@ Token scanToken() {
 			}
 			return makeToken(TOKEN_STAR);
 		case '%':
+			if (match('=')) {
+				return makeToken(TOKEN_PERCENT_EQUAL);
+			}
 			return makeToken(TOKEN_PERCENT);
 		case '!':
 			if (match('=')) {

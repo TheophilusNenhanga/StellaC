@@ -60,7 +60,7 @@ static Callable errorMethodsArray[] = {
 };
 
 static Callable randomMethodsArray[] = {
-	{"seed", randomSeedMethod, 1},
+	{"seed", randomSeedMethod, 2},
 	{"int", randomIntMethod, 3},
 	{"double", randomDoubleMethod, 3},
 	{"bool", randomBoolMethod, 2},
@@ -85,7 +85,8 @@ static Callable fileMethodsArray[] = {
 static Callable coreFunctionsArray[] = {
 	{"scanln", scanlnFunction, 0}, {"panic", panicFunction, 1}, {"len", lengthFunction, 1},
 	{"error", errorFunction, 1}, {"assert", assertFunction, 2}, {"err", errorFunction, 1}, {"ok", okFunction, 1},
-	{"number", numberFunction, 1},
+	{"int", intFunction, 1},
+	{"float", floatFunction, 1},
 	{"string", stringFunction, 1},
 	{"table", tableFunction, 1},
 	{"array", arrayFunction, 1},
@@ -97,7 +98,8 @@ static InfallibleCallable coreInfallibleFunctionsArray[] = {
 	{"println", printlnFunction, 1},
 	{"print", printFunction, 1},
 	{"type", typeFunction_, 1},
-	{"_number", numberFunction_, 1},
+	{"_int", intFunction_, 1},
+	{"_float", floatFunction_, 1},
 	{"_string", stringFunction_, 1},
 	{"_table", tableFunction_, 1},
 	{"_array", arrayFunction_, 1},

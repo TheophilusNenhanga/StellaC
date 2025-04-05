@@ -1,5 +1,6 @@
 #include "compiler.h"
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -136,7 +137,7 @@ static void emitReturn() {
 	} else {
 		emitByte(OP_NIL);
 	}
-	emitBytes(OP_RETURN, 0);
+	emitByte(OP_RETURN);
 }
 
 /**
@@ -632,6 +633,10 @@ static OpCode getCompoundOpcode(OpCode setOp, CompoundOp op) {
 					return OP_SET_LOCAL_STAR;
 				case COMPOUND_OP_SLASH:
 					return OP_SET_LOCAL_SLASH;
+				case COMPOUND_OP_BACK_SLASH:
+					return OP_SET_LOCAL_INT_DIVIDE;
+				case COMPOUND_OP_PERCENT:
+					return OP_SET_LOCAL_MODULUS;
 			}
 		case OP_SET_UPVALUE:
 			switch (op) {
@@ -643,6 +648,10 @@ static OpCode getCompoundOpcode(OpCode setOp, CompoundOp op) {
 					return OP_SET_UPVALUE_STAR;
 				case COMPOUND_OP_SLASH:
 					return OP_SET_UPVALUE_SLASH;
+				case COMPOUND_OP_BACK_SLASH:
+					return OP_SET_UPVALUE_INT_DIVIDE;
+				case COMPOUND_OP_PERCENT:
+					return OP_SET_UPVALUE_MODULUS;
 			}
 		case OP_SET_GLOBAL:
 			switch (op) {
@@ -654,6 +663,10 @@ static OpCode getCompoundOpcode(OpCode setOp, CompoundOp op) {
 					return OP_SET_GLOBAL_STAR;
 				case COMPOUND_OP_SLASH:
 					return OP_SET_GLOBAL_SLASH;
+				case COMPOUND_OP_BACK_SLASH:
+					return OP_SET_GLOBAL_INT_DIVIDE;
+				case COMPOUND_OP_PERCENT:
+					return OP_SET_GLOBAL_MODULUS;
 			}
 		default:
 			return setOp; // Should never happen
@@ -699,6 +712,10 @@ static void namedVariable(Token name, bool canAssign) {
 			op = COMPOUND_OP_STAR;
 		} else if (match(TOKEN_SLASH_EQUAL)) {
 			op = COMPOUND_OP_SLASH;
+		}else if (match(TOKEN_BACK_SLASH_EQUAL)) {
+			op = COMPOUND_OP_BACK_SLASH;
+		}else if (match(TOKEN_PERCENT_EQUAL)) {
+			op = COMPOUND_OP_PERCENT;
 		} else {
 			isCompoundAssignment = false;
 		}
@@ -948,8 +965,7 @@ static void varDeclaration() {
 
 	if (match(TOKEN_EQUAL)) {
 		expression();
-	}
-	else {
+	} else {
 		emitByte(OP_NIL);
 	}
 	consume(TOKEN_SEMICOLON, "Expected ';' after variable declaration.");
@@ -1129,7 +1145,7 @@ static void synchronize() {
 			case TOKEN_WHILE:
 			case TOKEN_RETURN:
 				return;
-			default:;
+			default: ;
 		}
 		advance();
 	}
@@ -1222,7 +1238,6 @@ static void matchExpression(bool canAssign) {
 				markInitialized();
 				consume(TOKEN_RIGHT_PAREN, "Expected ')' after identifier.");
 			}
-
 		} else if (match(TOKEN_ERR)) {
 			if (hasErrPattern) {
 				compilerPanic(&parser, "Cannot have multiple 'Err' patterns.", SYNTAX);
@@ -1262,7 +1277,7 @@ static void matchExpression(bool canAssign) {
 				consume(TOKEN_SEMICOLON, "Expected ';' after give expression.");
 			}
 			emitByte(OP_GIVE);
-		}else {
+		} else {
 			expression();
 			consume(TOKEN_SEMICOLON, "Expected ';' after expression.");
 		}
@@ -1290,7 +1305,8 @@ static void matchExpression(bool canAssign) {
 
 	if (hasOkPattern || hasErrPattern) {
 		if (!hasDefault && !(hasOkPattern && hasErrPattern)) {
-			compilerPanic(&parser, "Result 'match' must have both 'Ok' and 'Err' patterns, or include a default case.", SYNTAX);
+			compilerPanic(&parser, "Result 'match' must have both 'Ok' and 'Err' patterns, or include a default case.",
+			              SYNTAX);
 		}
 	} else if (!hasDefault) {
 		compilerPanic(&parser, "'match' expression must have default case 'default'.", SYNTAX);
@@ -1301,7 +1317,7 @@ static void matchExpression(bool canAssign) {
 	}
 
 	emitByte(OP_MATCH_END);
-	
+
 	FREE_ARRAY(current->owner, int, endJumps, jumpCapacity);
 	consume(TOKEN_RIGHT_BRACE, "Expected '}' after match expression.");
 	endMatchScope();
@@ -1362,14 +1378,30 @@ static void grouping(bool canAssign) {
 	consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression.");
 }
 
-/**
- * Parses a number literal.
- *
- * @param canAssign Whether the number literal can be the target of an assignment.
- */
 static void number(bool canAssign) {
-	double value = strtod(parser.previous.start, NULL);
-	emitConstant(NUMBER_VAL(value));
+	char* end;
+	errno = 0;
+
+	const char* numberStart = parser.previous.start;
+	double number = strtod(numberStart, &end);
+
+	if (end == numberStart) {
+		compilerPanic(&parser, "Failed to form number", SYNTAX);
+		return;
+	}
+	if (errno == ERANGE) {
+		emitConstant(FLOAT_VAL(number));
+		return;
+	}
+	if (!isfinite(number)) {
+		emitConstant(FLOAT_VAL(number));
+	}
+	int32_t integer = (int32_t)number;
+	if ((double)integer == number) {
+		emitConstant(INT_VAL(integer));
+	}else {
+		emitConstant(FLOAT_VAL(number));
+	}
 }
 
 /**
@@ -1436,7 +1468,6 @@ static void string(bool canAssign) {
 
 	for (int i = 0; i < srcLength; i++) {
 		if (src[i] == '\\') {
-
 			if (i + 1 >= srcLength) {
 				compilerPanic(&parser, "Unterminated escape sequence at end of string", SYNTAX);
 				FREE_ARRAY(current->owner, char, processed, parser.previous.length);
@@ -1515,61 +1546,61 @@ static void unary(bool canAssign) {
  * Defines prefix and infix parsing functions and precedence for each token type.
  */
 ParseRule rules[] = {
-		[TOKEN_LEFT_PAREN] = {grouping, call, PREC_CALL},
-		[TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
-		[TOKEN_LEFT_BRACE] = {tableLiteral, NULL, PREC_NONE},
-		[TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
-		[TOKEN_LEFT_SQUARE] = {arrayLiteral, collectionIndex, PREC_CALL},
-		[TOKEN_RIGHT_SQUARE] = {NULL, NULL, PREC_NONE},
-		[TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
-		[TOKEN_DOT] = {NULL, dot, PREC_CALL},
-		[TOKEN_MINUS] = {unary, binary, PREC_TERM},
-		[TOKEN_PLUS] = {NULL, binary, PREC_TERM},
-		[TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
-		[TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
-		[TOKEN_BACKSLASH] = {NULL, binary, PREC_FACTOR},
-		[TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
-		[TOKEN_STAR_STAR] = {NULL, binary, PREC_FACTOR},
-		[TOKEN_PERCENT] = {NULL, binary, PREC_FACTOR},
-		[TOKEN_LEFT_SHIFT] = {NULL, binary, PREC_SHIFT},
-		[TOKEN_RIGHT_SHIFT] = {NULL, binary, PREC_SHIFT},
-		[TOKEN_NOT] = {unary, NULL, PREC_NONE},
-		[TOKEN_BANG_EQUAL] = {NULL, binary, PREC_EQUALITY},
-		[TOKEN_EQUAL] = {NULL, NULL, PREC_NONE},
-		[TOKEN_EQUAL_EQUAL] = {NULL, binary, PREC_EQUALITY},
-		[TOKEN_GREATER] = {NULL, binary, PREC_COMPARISON},
-		[TOKEN_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
-		[TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
-		[TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
-		[TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
-		[TOKEN_STRING] = {string, NULL, PREC_NONE},
-		[TOKEN_INT] = {number, NULL, PREC_NONE},
-		[TOKEN_FLOAT] = {number, NULL, PREC_NONE},
-		[TOKEN_CONTINUE] = {NULL, NULL, PREC_NONE},
-		[TOKEN_BREAK] = {NULL, NULL, PREC_NONE},
-		[TOKEN_AND] = {NULL, and_, PREC_AND},
-		[TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
-		[TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
-		[TOKEN_FALSE] = {literal, NULL, PREC_NONE},
-		[TOKEN_FOR] = {NULL, NULL, PREC_NONE},
-		[TOKEN_FN] = {anonymousFunction, NULL, PREC_NONE},
-		[TOKEN_IF] = {NULL, NULL, PREC_NONE},
-		[TOKEN_NIL] = {literal, NULL, PREC_NONE},
-		[TOKEN_OR] = {NULL, or_, PREC_OR},
-		[TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
-		[TOKEN_SUPER] = {super_, NULL, PREC_NONE},
-		[TOKEN_SELF] = {self, NULL, PREC_NONE},
-		[TOKEN_TRUE] = {literal, NULL, PREC_NONE},
-		[TOKEN_LET] = {NULL, NULL, PREC_NONE},
-		[TOKEN_USE] = {NULL, NULL, PREC_NONE},
-		[TOKEN_FROM] = {NULL, NULL, PREC_NONE},
-		[TOKEN_PUB] = {NULL, NULL, PREC_NONE},
-		[TOKEN_WHILE] = {NULL, NULL, PREC_NONE},
-		[TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
-		[TOKEN_DEFAULT] = {NULL, NULL, PREC_NONE},
-		[TOKEN_EQUAL_ARROW] = {NULL, NULL, PREC_NONE},
-		[TOKEN_MATCH] = {matchExpression, NULL, PREC_PRIMARY},
-		[TOKEN_EOF] = {NULL, NULL, PREC_NONE},
+	[TOKEN_LEFT_PAREN] = {grouping, call, PREC_CALL},
+	[TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
+	[TOKEN_LEFT_BRACE] = {tableLiteral, NULL, PREC_NONE},
+	[TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
+	[TOKEN_LEFT_SQUARE] = {arrayLiteral, collectionIndex, PREC_CALL},
+	[TOKEN_RIGHT_SQUARE] = {NULL, NULL, PREC_NONE},
+	[TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
+	[TOKEN_DOT] = {NULL, dot, PREC_CALL},
+	[TOKEN_MINUS] = {unary, binary, PREC_TERM},
+	[TOKEN_PLUS] = {NULL, binary, PREC_TERM},
+	[TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
+	[TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
+	[TOKEN_BACKSLASH] = {NULL, binary, PREC_FACTOR},
+	[TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
+	[TOKEN_STAR_STAR] = {NULL, binary, PREC_FACTOR},
+	[TOKEN_PERCENT] = {NULL, binary, PREC_FACTOR},
+	[TOKEN_LEFT_SHIFT] = {NULL, binary, PREC_SHIFT},
+	[TOKEN_RIGHT_SHIFT] = {NULL, binary, PREC_SHIFT},
+	[TOKEN_NOT] = {unary, NULL, PREC_NONE},
+	[TOKEN_BANG_EQUAL] = {NULL, binary, PREC_EQUALITY},
+	[TOKEN_EQUAL] = {NULL, NULL, PREC_NONE},
+	[TOKEN_EQUAL_EQUAL] = {NULL, binary, PREC_EQUALITY},
+	[TOKEN_GREATER] = {NULL, binary, PREC_COMPARISON},
+	[TOKEN_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
+	[TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
+	[TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
+	[TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
+	[TOKEN_STRING] = {string, NULL, PREC_NONE},
+	[TOKEN_INT] = {number, NULL, PREC_NONE},
+	[TOKEN_FLOAT] = {number, NULL, PREC_NONE},
+	[TOKEN_CONTINUE] = {NULL, NULL, PREC_NONE},
+	[TOKEN_BREAK] = {NULL, NULL, PREC_NONE},
+	[TOKEN_AND] = {NULL, and_, PREC_AND},
+	[TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
+	[TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
+	[TOKEN_FALSE] = {literal, NULL, PREC_NONE},
+	[TOKEN_FOR] = {NULL, NULL, PREC_NONE},
+	[TOKEN_FN] = {anonymousFunction, NULL, PREC_NONE},
+	[TOKEN_IF] = {NULL, NULL, PREC_NONE},
+	[TOKEN_NIL] = {literal, NULL, PREC_NONE},
+	[TOKEN_OR] = {NULL, or_, PREC_OR},
+	[TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
+	[TOKEN_SUPER] = {super_, NULL, PREC_NONE},
+	[TOKEN_SELF] = {self, NULL, PREC_NONE},
+	[TOKEN_TRUE] = {literal, NULL, PREC_NONE},
+	[TOKEN_LET] = {NULL, NULL, PREC_NONE},
+	[TOKEN_USE] = {NULL, NULL, PREC_NONE},
+	[TOKEN_FROM] = {NULL, NULL, PREC_NONE},
+	[TOKEN_PUB] = {NULL, NULL, PREC_NONE},
+	[TOKEN_WHILE] = {NULL, NULL, PREC_NONE},
+	[TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
+	[TOKEN_DEFAULT] = {NULL, NULL, PREC_NONE},
+	[TOKEN_EQUAL_ARROW] = {NULL, NULL, PREC_NONE},
+	[TOKEN_MATCH] = {matchExpression, NULL, PREC_PRIMARY},
+	[TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };
 
 /**

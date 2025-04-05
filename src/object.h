@@ -74,7 +74,7 @@ struct Object {
 
 struct ObjectString {
 	Object Object;
-	uint64_t length;
+	uint32_t length;
 	char *chars;
 	uint32_t hash;
 };
@@ -122,8 +122,8 @@ typedef struct {
 typedef struct {
 	Object object;
 	Value *array;
-	uint64_t size;
-	uint64_t capacity;
+	uint32_t size;
+	uint32_t capacity;
 } ObjectArray;
 
 typedef struct {
@@ -468,7 +468,7 @@ ObjectResult* stellaErr(VM *vm, ObjectError *error);
  *
  * @return A pointer to the newly created ObjectArray.
  */
-ObjectArray *newArray(VM *vm, uint64_t elementCount);
+ObjectArray *newArray(VM *vm, uint32_t elementCount);
 
 /**
  * @brief Creates a new string object and takes ownership of the given character buffer.
@@ -485,7 +485,7 @@ ObjectArray *newArray(VM *vm, uint64_t elementCount);
  *
  * @return A pointer to the interned ObjectString.
  */
-ObjectString *takeString(VM *vm, char *chars, uint64_t length);
+ObjectString *takeString(VM *vm, char *chars, uint32_t length);
 
 /**
  * @brief Creates a new string object by copying a C-style string.
@@ -500,7 +500,7 @@ ObjectString *takeString(VM *vm, char *chars, uint64_t length);
  *
  * @return A pointer to the interned ObjectString.
  */
-ObjectString *copyString(VM *vm, const char *chars, uint64_t length);
+ObjectString *copyString(VM *vm, const char *chars, uint32_t length);
 
 /**
  * @brief Converts a Value to its string representation.
@@ -585,7 +585,7 @@ void markObjectTable(VM *vm, ObjectTable *table);
  *
  * @return true if capacity is ensured (either already sufficient or resizing successful), false if resizing failed (e.g., memory allocation failure).
  */
-bool ensureCapacity(VM *vm, ObjectArray *array, uint64_t capacityNeeded);
+bool ensureCapacity(VM *vm, ObjectArray *array, uint32_t capacityNeeded);
 
 /**
  * @brief Sets a value at a specific index in an array.
@@ -600,7 +600,7 @@ bool ensureCapacity(VM *vm, ObjectArray *array, uint64_t capacityNeeded);
  *
  * @return true if the value was set successfully (index within bounds), false otherwise (index out of bounds).
  */
-bool arraySet(VM *vm, ObjectArray *array, uint64_t index, Value value);
+bool arraySet(VM *vm, ObjectArray *array, uint32_t index, Value value);
 
 /**
  * @brief Retrieves a value from an array at a specific index.
@@ -614,7 +614,7 @@ bool arraySet(VM *vm, ObjectArray *array, uint64_t index, Value value);
  *
  * @return true if the array is not NULL and the value was retrieved, false otherwise (array is NULL).
  */
-bool arrayGet(ObjectArray *array, uint64_t index, Value *value);
+bool arrayGet(ObjectArray *array, uint32_t index, Value *value);
 
 /**
  * @brief Adds a value to the end of an array.
@@ -629,7 +629,7 @@ bool arrayGet(ObjectArray *array, uint64_t index, Value *value);
  *
  * @return true if the value was added successfully, false otherwise (e.g., memory allocation failure during resizing).
  */
-bool arrayAdd(VM *vm, ObjectArray *array, Value value, uint64_t index);
+bool arrayAdd(VM *vm, ObjectArray *array, Value value, uint32_t index);
 
 /**
  * @brief Adds a value to the end of an array.

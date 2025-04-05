@@ -106,11 +106,11 @@ static uint32_t hashValue(Value value) {
 	if (IS_CRUX_STRING(value)) {
 		return AS_CRUX_STRING(value)->hash;
 	}
-	if (IS_NUMBER(value)) {
-		double num = AS_NUMBER(value);
-		if (num == (int64_t) num) {
-			return (uint32_t) ((int64_t) num ^ ((int64_t) num >> 32));
-		}
+	if (IS_INT(value)) {
+		return (uint32_t) AS_INT(value);
+	}
+	if (IS_FLOAT(value)) {
+		double num = AS_FLOAT(value);
 		uint64_t bits;
 		memcpy(&bits, &num, sizeof(bits));
 		return (uint32_t) (bits ^ (bits >> 32));
@@ -223,7 +223,7 @@ ObjectClosure *newClosure(VM *vm, ObjectFunction *function) {
  *
  * @return A pointer to the newly created and interned ObjectString.
  */
-static ObjectString *allocateString(VM *vm, char *chars, uint64_t length, uint32_t hash) {
+static ObjectString *allocateString(VM *vm, char *chars, uint32_t length, uint32_t hash) {
 	ObjectString *string = ALLOCATE_OBJECT(vm, ObjectString, OBJECT_STRING);
 	string->length = length;
 	string->chars = chars;
@@ -258,7 +258,7 @@ static inline uint32_t hashString(const char *key, size_t length) {
 	return hash;
 }
 
-ObjectString *copyString(VM *vm, const char *chars, uint64_t length) {
+ObjectString *copyString(VM *vm, const char *chars, uint32_t length) {
 	uint32_t hash = hashString(chars, length);
 
 	ObjectString *interned = tableFindString(&vm->strings, chars, length, hash);
@@ -379,7 +379,7 @@ void printObject(Value value) {
 	}
 }
 
-ObjectString *takeString(VM *vm, char *chars, uint64_t length) {
+ObjectString *takeString(VM *vm, char *chars, uint32_t length) {
 	uint32_t hash = hashString(chars, length);
 
 	ObjectString *interned = tableFindString(&vm->strings, chars, length, hash);
@@ -396,13 +396,12 @@ ObjectString *takeString(VM *vm, char *chars, uint64_t length) {
 ObjectString *toString(VM *vm, Value value) {
 	if (!IS_CRUX_OBJECT(value)) {
 		char buffer[32];
-		if (IS_NUMBER(value)) {
-			double num = AS_NUMBER(value);
-			if (num == (int) num) {
-				snprintf(buffer, sizeof(buffer), "%.0f", num);
-			} else {
-				snprintf(buffer, sizeof(buffer), "%g", num);
-			}
+		if (IS_FLOAT(value)) {
+			double num = AS_FLOAT(value);
+			snprintf(buffer, sizeof(buffer), "%g", num);
+		}else if (IS_INT(value)) {
+			int32_t num = AS_INT(value);
+			snprintf(buffer, sizeof(buffer), "%d", num);
 		} else if (IS_BOOL(value)) {
 			strcpy(buffer, AS_BOOL(value) ? "true" : "false");
 		} else if (IS_NIL(value)) {
@@ -819,7 +818,7 @@ bool objectTableGet(ObjectTable *table, Value key, Value *value) {
 }
 
 
-ObjectArray *newArray(VM *vm, uint64_t elementCount) {
+ObjectArray *newArray(VM *vm, uint32_t elementCount) {
 	ObjectArray *array = ALLOCATE_OBJECT(vm, ObjectArray, OBJECT_ARRAY);
 	array->capacity = calculateCollectionCapacity(elementCount);
 	array->size = 0;
@@ -831,11 +830,11 @@ ObjectArray *newArray(VM *vm, uint64_t elementCount) {
 }
 
 
-bool ensureCapacity(VM *vm, ObjectArray *array, uint64_t capacityNeeded) {
+bool ensureCapacity(VM *vm, ObjectArray *array, uint32_t capacityNeeded) {
 	if (capacityNeeded <= array->capacity) {
 		return true;
 	}
-	uint64_t newCapacity = array->capacity;
+	uint32_t newCapacity = array->capacity;
 	while (newCapacity < capacityNeeded) {
 		if (newCapacity > INT_MAX / 2) {
 			return false;
@@ -846,7 +845,7 @@ bool ensureCapacity(VM *vm, ObjectArray *array, uint64_t capacityNeeded) {
 	if (newArray == NULL) {
 		return false;
 	}
-	for (uint64_t i = array->capacity; i < newCapacity; i++) {
+	for (uint32_t i = array->capacity; i < newCapacity; i++) {
 		newArray[i] = NIL_VAL;
 	}
 	array->array = newArray;
@@ -855,7 +854,7 @@ bool ensureCapacity(VM *vm, ObjectArray *array, uint64_t capacityNeeded) {
 }
 
 
-bool arraySet(VM *vm, ObjectArray *array, uint64_t index, Value value) {
+bool arraySet(VM *vm, ObjectArray *array, uint32_t index, Value value) {
 	if (index >= array->size) {
 		return false;
 	}
@@ -866,7 +865,7 @@ bool arraySet(VM *vm, ObjectArray *array, uint64_t index, Value value) {
 	return true;
 }
 
-bool arrayGet(ObjectArray *array, uint64_t index, Value *value) {
+bool arrayGet(ObjectArray *array, uint32_t index, Value *value) {
 	if (array == NULL) {
 		return false;
 	}
@@ -874,7 +873,7 @@ bool arrayGet(ObjectArray *array, uint64_t index, Value *value) {
 	return true;
 }
 
-bool arrayAdd(VM *vm, ObjectArray *array, Value value, uint64_t index) {
+bool arrayAdd(VM *vm, ObjectArray *array, Value value, uint32_t index) {
 	if (!ensureCapacity(vm, array, array->size + 1)) {
 		return false;
 	}

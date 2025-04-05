@@ -8,13 +8,13 @@
 
 static Value getLength(Value value) {
 	if (IS_CRUX_ARRAY(value)) {
-		return NUMBER_VAL(AS_CRUX_ARRAY(value)->size);
+		return INT_VAL(AS_CRUX_ARRAY(value)->size);
 	}
 	if (IS_CRUX_STRING(value)) {
-		return NUMBER_VAL(AS_CRUX_STRING(value)->length);
+		return INT_VAL(AS_CRUX_STRING(value)->length);
 	}
 	if (IS_CRUX_TABLE(value)) {
-		return NUMBER_VAL(AS_CRUX_TABLE(value)->size);
+		return INT_VAL(AS_CRUX_TABLE(value)->size);
 	}
 	return NIL_VAL;
 }
@@ -44,10 +44,14 @@ Value lengthFunction_(VM *vm, int argCount, Value *args) {
 Value typeFunction_(VM *vm, int argCount, Value *args) {
     Value value = args[0];
     
-    if (IS_NUMBER(value)) {
-        return OBJECT_VAL(copyString(vm, "number", 6));
+    if (IS_INT(value)) {
+        return OBJECT_VAL(copyString(vm, "int", 3));
     }
-    
+
+    if (IS_FLOAT(value)) {
+        return OBJECT_VAL(copyString(vm, "float", 5));
+    }
+
     if (IS_BOOL(value)) {
         return OBJECT_VAL(copyString(vm, "boolean", 7));
     }
@@ -92,6 +96,10 @@ Value typeFunction_(VM *vm, int argCount, Value *args) {
     
     if (IS_CRUX_RESULT(value)) {
         return OBJECT_VAL(copyString(vm, "result", 6));
+    }
+
+    if (IS_INT(value)) {
+        return OBJECT_VAL(copyString(vm, "int", 3));
     }
     
     return OBJECT_VAL(copyString(vm, "unknown", 7));
@@ -151,7 +159,7 @@ static Value castTable(VM *vm, Value *args) {
         ObjectArray* array = AS_CRUX_ARRAY(value);
         ObjectTable* table = newTable(vm, (int) array->size);
         for (int i = 0; i < array->size; i++) {
-            Value k = NUMBER_VAL(i);
+            Value k = INT_VAL(i);
             Value v = array->array[i];
             objectTableSet(vm, table, k, v);
         }
@@ -162,20 +170,20 @@ static Value castTable(VM *vm, Value *args) {
         ObjectString* string = AS_CRUX_STRING(value);
         ObjectTable* table = newTable(vm, string->length);
         for (int i = 0; i < string->length; i++) {
-            objectTableSet(vm, table, NUMBER_VAL(i), OBJECT_VAL(copyString(vm, &string->chars[i], 1)));
+            objectTableSet(vm, table, INT_VAL(i), OBJECT_VAL(copyString(vm, &string->chars[i], 1)));
         }
         return OBJECT_VAL(table);
     }
 
     ObjectTable* table = newTable(vm, 1);
-    objectTableSet(vm, table, NUMBER_VAL(0), value);
+    objectTableSet(vm, table, INT_VAL(0), value);
     return OBJECT_VAL(table);
 }
 
-static Value castNumber(VM *vm, Value *args, bool* success) {
+static Value castInt(VM *vm, Value *args, bool* success) {
     Value value = args[0];
 
-    if (IS_NUMBER(value)) {
+    if (IS_INT(value)) {
         return value;
     }
 
@@ -187,27 +195,65 @@ static Value castNumber(VM *vm, Value *args, bool* success) {
         // can check for overflow or underflow with errno
 
         if (end != str) {
-            return NUMBER_VAL(num);
+            return INT_VAL((uint32_t)num);
         }
     }
 
     if (IS_BOOL(value)) {
-        return NUMBER_VAL(AS_BOOL(value) ? 1 : 0);
+        return INT_VAL(AS_BOOL(value) ? 1 : 0);
     }
 
     if (IS_NIL(value)) {
-        return NUMBER_VAL(0);
+        return INT_VAL(0);
     }
 
     *success = false;
     return NIL_VAL;
 }
 
-ObjectResult* numberFunction(VM *vm, int argCount, Value *args) {
+static Value castFloat(VM *vm, Value *args, bool* success) {
+    Value value = args[0];
+
+    if (IS_INT(value)) {
+        return value;
+    }
+
+    if (IS_CRUX_STRING(value)) {
+        char* str = AS_C_STRING(value);
+        char* end;
+        double num = strtod(str, &end);
+
+        if (end != str) {
+            return FLOAT_VAL(num);
+        }
+    }
+
+    if (IS_BOOL(value)) {
+        return FLOAT_VAL(AS_BOOL(value) ? 1 : 0);
+    }
+
+    if (IS_NIL(value)) {
+        return FLOAT_VAL(0);
+    }
+
+    *success = false;
+    return NIL_VAL;
+}
+
+ObjectResult* intFunction(VM *vm, int argCount, Value *args) {
     bool success = true;
-    Value value = castNumber(vm, args, &success);
+    Value value = castInt(vm, args, &success);
     if (!success) {
     return stellaErr(vm, newError(vm, copyString(vm, "Cannot convert value to number.", 30), TYPE, false));
+    }
+    return stellaOk(vm, value);
+}
+
+ObjectResult* floatFunction(VM *vm, int argCount, Value *args) {
+    bool success = true;
+    Value value = castFloat(vm, args, &success);
+    if (!success) {
+        return stellaErr(vm, newError(vm, copyString(vm, "Cannot convert value to number.", 30), TYPE, false));
     }
     return stellaOk(vm, value);
 }
@@ -230,9 +276,14 @@ ObjectResult* tableFunction(VM *vm, int argCount, Value *args) {
     return stellaOk(vm, castTable(vm, args));
 }
 
-Value numberFunction_(VM *vm, int argCount, Value *args) {
+Value intFunction_(VM *vm, int argCount, Value *args) {
     bool success = true;
-    return castNumber(vm, args, &success);
+    return castInt(vm, args, &success);
+}
+
+Value floatFunction_(VM *vm, int argCount, Value *args) {
+    bool success = true;
+    return castFloat(vm, args, &success);
 }
 
 Value stringFunction_(VM *vm, int argCount, Value *args) {

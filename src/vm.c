@@ -17,7 +17,7 @@
 
 
 VM *newVM() {
-	VM *vm = (VM *) malloc(sizeof(VM));
+	VM *vm = malloc(sizeof(VM));
 	if (vm == NULL) {
 		fprintf(stderr, "Stella Fatal Error: Could not allocate memory for VM\n");
 		exit(1);
@@ -39,10 +39,19 @@ void push(VM *vm, Value value) {
 	vm->stackTop++; // stack top points just past the last used element, at the next available one
 }
 
-
 Value pop(VM *vm) {
 	vm->stackTop--; // Move the stack pointer back to get the most recent slot in the array
 	return *vm->stackTop;
+}
+
+static inline void popTwo(VM *vm) {
+	pop(vm);
+	pop(vm);
+}
+
+static inline void popPush(VM *vm, Value value) {
+	pop(vm);
+	push(vm, value);
 }
 
 /**
@@ -51,7 +60,7 @@ Value pop(VM *vm) {
  * @param distance How far from the top of the stack to look (0 is the top)
  * @return The value at the specified distance from the top
  */
-static Value peek(VM *vm, int distance) { return vm->stackTop[-1 - distance]; }
+static inline Value peek(VM *vm, int distance) { return vm->stackTop[-1 - distance]; }
 
 /**
  * Calls a function closure with the given arguments.
@@ -99,7 +108,7 @@ static bool callValue(VM *vm, Value callee, int argCount) {
 
 				ObjectResult *result = native->function(vm, argCount, vm->stackTop - argCount);
 
-				vm->stackTop -= argCount+1;
+				vm->stackTop -= argCount + 1;
 
 				if (!result->isOk) {
 					if (result->as.error->isPanic) {
@@ -153,7 +162,7 @@ static bool callValue(VM *vm, Value callee, int argCount) {
 				}
 
 				Value result = native->function(vm, argCount, vm->stackTop - argCount);
-				vm->stackTop -= argCount+1;
+				vm->stackTop -= argCount + 1;
 				push(vm, result);
 				return true;
 			}
@@ -194,30 +203,30 @@ static bool callValue(VM *vm, Value callee, int argCount) {
  */
 static bool invokeFromClass(VM *vm, ObjectClass *klass, ObjectString *name,
                             int argCount) {
-  Value method;
-  if (tableGet(&klass->methods, name, &method)) {
-    return call(vm, AS_CRUX_CLOSURE(method), argCount);
-  }
-  runtimePanic(vm, NAME, "Undefined property '%s'.", name->chars);
-  return false;
+	Value method;
+	if (tableGet(&klass->methods, name, &method)) {
+		return call(vm, AS_CRUX_CLOSURE(method), argCount);
+	}
+	runtimePanic(vm, NAME, "Undefined property '%s'.", name->chars);
+	return false;
 }
 
 static bool handleInvoke(VM *vm, int argCount, Value receiver, Value original,
                          Value value) {
-  Value result;
-  // Save original stack order
-  vm->stackTop[-argCount - 1] = value;
-  vm->stackTop[-argCount] = receiver;
+	Value result;
+	// Save original stack order
+	vm->stackTop[-argCount - 1] = value;
+	vm->stackTop[-argCount] = receiver;
 
-  if (!callValue(vm, value, argCount)) {
-    return false;
-  }
+	if (!callValue(vm, value, argCount)) {
+		return false;
+	}
 
-  // restore the caller and put the result in the right place
-  result = pop(vm);
-  push(vm, original);
-  push(vm, result);
-  return true;
+	// restore the caller and put the result in the right place
+	result = pop(vm);
+	push(vm, original);
+	push(vm, result);
+	return true;
 }
 
 /**
@@ -237,7 +246,7 @@ static bool invoke(VM *vm, ObjectString *name, int argCount) {
 			Value value;
 			if (tableGet(&vm->stringType.methods, name, &value)) {
 				return handleInvoke(vm, argCount, receiver, original,
-                                              value);
+				                    value);
 			}
 			runtimePanic(vm, NAME, "Undefined method '%s'.", name->chars);
 			return false;
@@ -287,7 +296,7 @@ static bool invoke(VM *vm, ObjectString *name, int argCount) {
 			runtimePanic(vm, NAME, "Undefined method '%s'.", name->chars);
 			return false;
 		}
-		
+
 		runtimePanic(vm, TYPE, "Only instances have methods.");
 		return false;
 	}
@@ -299,11 +308,11 @@ static bool invoke(VM *vm, ObjectString *name, int argCount) {
 		Value result;
 		// Save original stack order
 		vm->stackTop[-argCount - 1] = value;
-		
+
 		if (!callValue(vm, value, argCount)) {
 			return false;
 		}
-		
+
 		// After the call, restore the original caller and put the result in the right place
 		result = pop(vm);
 		push(vm, original);
@@ -319,7 +328,7 @@ static bool invoke(VM *vm, ObjectString *name, int argCount) {
 		push(vm, result);
 		return true;
 	}
-	
+
 	return false;
 }
 
@@ -407,7 +416,7 @@ static void defineMethod(VM *vm, ObjectString *name) {
  * @param value The value to check
  * @return true if the value is falsy, false otherwise
  */
-static bool isFalsy(Value value) { return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value)); }
+static inline bool isFalsy(Value value) { return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value)); }
 
 /**
  * Concatenates two values as strings.
@@ -455,8 +464,7 @@ static bool concatenate(VM *vm) {
 
 	ObjectString *result = takeString(vm, chars, length);
 
-	pop(vm);
-	pop(vm);
+	popTwo(vm);
 	push(vm, OBJECT_VAL(result));
 	return true;
 }
@@ -470,7 +478,6 @@ void initVM(VM *vm) {
 	vm->grayCount = 0;
 	vm->grayCapacity = 0;
 	vm->grayStack = NULL;
-	vm->previousInstruction = 0;
 	vm->enclosing = NULL;
 	vm->module = NULL;
 	vm->nativeModules = (NativeModules){.modules = ALLOCATE(vm, NativeModule, 8), .count = 0, .capacity = 8};
@@ -517,10 +524,10 @@ void freeVM(VM *vm) {
 		FREE(vm, Table, module.names);
 	}
 	FREE_ARRAY(vm, NativeModule, vm->nativeModules.modules, vm->nativeModules.capacity);
-	
+
 	vm->initString = NULL;
 	freeObjects(vm);
-	
+
 	if (vm->enclosing != NULL) {
 		free(vm);
 	}
@@ -536,149 +543,332 @@ static bool binaryOperation(VM *vm, OpCode operation) {
 	Value b = peek(vm, 0);
 	Value a = peek(vm, 1);
 
-	// Check if both operands are numbers
-	if (!IS_NUMBER(a)) {
-		runtimePanic(vm, TYPE, typeErrorMessage(vm, a, "number"));
+	bool aIsInt = IS_INT(a);
+	bool bIsInt = IS_INT(b);
+	bool aIsFloat = IS_FLOAT(a);
+	bool bIsFloat = IS_FLOAT(b);
+
+	if (!((aIsInt || aIsFloat) && (bIsInt || bIsFloat))) {
+		if (!(aIsInt || aIsFloat)) {
+			runtimePanic(vm, TYPE, typeErrorMessage(vm, a, "'int' or 'float'"));
+		} else {
+			runtimePanic(vm, TYPE, typeErrorMessage(vm, b, "'int' or 'float'"));
+		}
 		return false;
 	}
-	
-	if (!IS_NUMBER(b)) {
-		runtimePanic(vm, TYPE, typeErrorMessage(vm, b, "number"));
-		return false;
-	}
 
-	pop(vm);
-	pop(vm);
+	if (aIsInt && bIsInt) {
+		int32_t intA = AS_INT(a);
+		int32_t intB = AS_INT(b);
 
-	double aNum = AS_NUMBER(a);
-	double bNum = AS_NUMBER(b);
+		switch (operation) {
+			case OP_ADD: {
+				int64_t result = (int64_t) intA + (int64_t) intB;
+				popTwo(vm);
+				if (result >= INT32_MIN && result <= INT32_MAX) {
+					push(vm, INT_VAL((int32_t)result));
+				} else {
+					push(vm, FLOAT_VAL((double)result)); // Promote on overflow
+				}
+				break;
+			}
+			case OP_SUBTRACT: {
+				int64_t result = (int64_t) intA - (int64_t) intB;
+				popTwo(vm);
+				if (result >= INT32_MIN && result <= INT32_MAX) {
+					push(vm, INT_VAL((int32_t)result));
+				} else {
+					push(vm, FLOAT_VAL((double)result)); // Promote on overflow
+				}
+				break;
+			}
+			case OP_MULTIPLY: {
+				int64_t result = (int64_t) intA * (int64_t) intB;
+				popTwo(vm);
+				if (result >= INT32_MIN && result <= INT32_MAX) {
+					push(vm, INT_VAL((int32_t)result));
+				} else {
+					push(vm, FLOAT_VAL((double)result)); // Promote on overflow
+				}
+				break;
+			}
+			case OP_DIVIDE: {
+				if (intB == 0) {
+					runtimePanic(vm, DIVISION_BY_ZERO, "Division by zero.");
+					return false;
+				}
+				popTwo(vm);
+				push(vm, FLOAT_VAL((double)intA / (double)intB));
+				break;
+			}
+			case OP_INT_DIVIDE: {
+				if (intB == 0) {
+					runtimePanic(vm, DIVISION_BY_ZERO, "Integer division by zero.");
+					return false;
+				}
+				// Edge case: INT32_MIN / -1 overflows int32_t
+				if (intA == INT32_MIN && intB == -1) {
+					popTwo(vm);
+					push(vm, FLOAT_VAL(-(double)INT32_MIN)); // Promote
+				} else {
+					popTwo(vm);
+					push(vm, INT_VAL(intA / intB));
+				}
+				break;
+			}
+			case OP_MODULUS: {
+				if (intB == 0) {
+					runtimePanic(vm, DIVISION_BY_ZERO, "Modulo by zero.");
+					return false;
+				}
 
-	switch (operation) {
-		case OP_ADD: {
-			push(vm, NUMBER_VAL(aNum + bNum));
-			break;
+				if (intA == INT32_MIN && intB == -1) {
+					popTwo(vm);
+					push(vm, INT_VAL(0));
+				} else {
+					popTwo(vm);
+					push(vm, INT_VAL(intA % intB));
+				}
+				break;
+			}
+			case OP_LEFT_SHIFT: {
+				if (intB < 0 || intB >= 32) {
+					runtimePanic(vm, RUNTIME, "Invalid shift amount (%d) for <<.", intB);
+					return false;
+				}
+				popTwo(vm);
+				push(vm, INT_VAL(intA << intB));
+				break;
+			}
+			case OP_RIGHT_SHIFT: {
+				if (intB < 0 || intB >= 32) {
+					runtimePanic(vm, RUNTIME, "Invalid shift amount (%d) for >>.", intB);
+					return false;
+				}
+				popTwo(vm);
+				push(vm, INT_VAL(intA >> intB));
+				break;
+			}
+			case OP_POWER: {
+				// Promote int^int to float
+				popTwo(vm);
+				push(vm, FLOAT_VAL(pow((double)intA, (double)intB)));
+				break;
+			}
+			case OP_LESS: popTwo(vm);
+				push(vm, BOOL_VAL(intA < intB));
+				break;
+			case OP_LESS_EQUAL: popTwo(vm);
+				push(vm, BOOL_VAL(intA <= intB));
+				break;
+			case OP_GREATER: popTwo(vm);
+				push(vm, BOOL_VAL(intA > intB));
+				break;
+			case OP_GREATER_EQUAL: popTwo(vm);
+				push(vm, BOOL_VAL(intA >= intB));
+				break;
+
+			default:
+				runtimePanic(vm, RUNTIME, "Unknown binary operation %d for int, int.", operation);
+				return false;
 		}
+	} else {
+		double doubleA = aIsFloat ? AS_FLOAT(a) : (double) AS_INT(a);
+		double doubleB = bIsFloat ? AS_FLOAT(b) : (double) AS_INT(b);
 
-		case OP_SUBTRACT: {
-			push(vm, NUMBER_VAL(aNum - bNum));
-			break;
-		}
+		switch (operation) {
+			case OP_ADD: popTwo(vm);
+				push(vm, FLOAT_VAL(doubleA + doubleB));
+				break;
+			case OP_SUBTRACT: popTwo(vm);
+				push(vm, FLOAT_VAL(doubleA - doubleB));
+				break;
+			case OP_MULTIPLY: popTwo(vm);
+				push(vm, FLOAT_VAL(doubleA * doubleB));
+				break;
+			case OP_DIVIDE: {
+				if (doubleB == 0.0) {
+					runtimePanic(vm, DIVISION_BY_ZERO, "Division by zero.");
+					return false;
+				}
+				popTwo(vm);
+				push(vm, FLOAT_VAL(doubleA / doubleB));
+				break;
+			}
+			case OP_POWER: {
+				popTwo(vm);
+				push(vm, FLOAT_VAL(pow(doubleA, doubleB)));
+				break;
+			}
 
-		case OP_MULTIPLY: {
-			push(vm, NUMBER_VAL(aNum * bNum));
-			break;
-		}
+			case OP_LESS: popTwo(vm);
+				push(vm, BOOL_VAL(doubleA < doubleB));
+				break;
+			case OP_LESS_EQUAL: popTwo(vm);
+				push(vm, BOOL_VAL(doubleA <= doubleB));
+				break;
+			case OP_GREATER: popTwo(vm);
+				push(vm, BOOL_VAL(doubleA > doubleB));
+				break;
+			case OP_GREATER_EQUAL: popTwo(vm);
+				push(vm, BOOL_VAL(doubleA >= doubleB));
+				break;
 
-		case OP_DIVIDE: {
-			if (bNum == 0) {
-				runtimePanic(vm, DIVISION_BY_ZERO, "Tried to divide by zero.");
+			case OP_INT_DIVIDE:
+			case OP_MODULUS:
+			case OP_LEFT_SHIFT:
+			case OP_RIGHT_SHIFT: {
+				runtimePanic(vm, TYPE, "Operands for integer operation must both be integers.");
 				return false;
 			}
-			push(vm, NUMBER_VAL(aNum / bNum));
-			break;
-		}
 
-		case OP_POWER: {
-			push(vm, NUMBER_VAL(pow(aNum, bNum)));
-			break;
-		}
-
-		case OP_INT_DIVIDE: {
-			if (bNum == 0 || ((uint64_t) bNum) == 0) {
-				runtimePanic(vm, DIVISION_BY_ZERO, "Tried to perform integer division by integer 0.");
+			default:
+				runtimePanic(vm, RUNTIME, "Unknown binary operation %d for float/mixed.", operation);
 				return false;
-			}
-
-			if (fabs(aNum) > INT64_MAX || fabs(bNum) > INT64_MAX) {
-				runtimePanic(vm, VALUE, "Division result would overflow.");
-				return false;
-			}
-			push(vm, NUMBER_VAL((int64_t) aNum / (int64_t) bNum));
-			break;
-		}
-
-		case OP_LESS_EQUAL: {
-			push(vm, BOOL_VAL(aNum <= bNum));
-			break;
-		}
-
-		case OP_GREATER_EQUAL: {
-			push(vm, BOOL_VAL(aNum >= bNum));
-			break;
-		}
-
-		case OP_LESS: {
-			push(vm, BOOL_VAL(aNum < bNum));
-			break;
-		}
-
-		case OP_GREATER: {
-			push(vm, BOOL_VAL(aNum > bNum));
-			break;
-		}
-		case OP_MODULUS: {
-			push(vm, NUMBER_VAL((int64_t) aNum % (int64_t) bNum));
-			break;
-		}
-		case OP_LEFT_SHIFT: {
-			push(vm, NUMBER_VAL((int64_t) aNum << (int64_t) bNum));
-			break;
-		}
-		case OP_RIGHT_SHIFT: {
-			push(vm, NUMBER_VAL((int64_t) aNum >> (int64_t) bNum));
-			break;
-		}
-		default: {
 		}
 	}
 	return true;
 }
 
-/**
- * Performs a compound assignment operation on a global variable.
- * @param vm The virtual machine
- * @param name The name of the global variable
- * @param opcode The operation code to perform
- * @param operation String representation of the operation for error messages
- * @return The interpretation result
- */
 InterpretResult globalCompoundOperation(VM *vm, ObjectString *name, OpCode opcode, char *operation) {
 	Value currentValue;
 	if (!tableGet(&vm->globals, name, &currentValue)) {
-		runtimePanic(vm, NAME, "Undefined variable '%s'.", name->chars);
+		runtimePanic(vm, NAME, "Undefined variable '%s' for compound assignment.", name->chars);
 		return INTERPRET_RUNTIME_ERROR;
 	}
-	if (!(IS_NUMBER(currentValue) && IS_NUMBER(peek(vm, 0)))) {
-		runtimePanic(vm, TYPE, "Operands must be ot type 'number' for '%s' operator.", operation);
+
+	Value operandValue = peek(vm, 0);
+
+	bool currentIsInt = IS_INT(currentValue);
+	bool currentIsFloat = IS_FLOAT(currentValue);
+	bool operandIsInt = IS_INT(operandValue);
+	bool operandIsFloat = IS_FLOAT(operandValue);
+
+	if (!((currentIsInt || currentIsFloat) && (operandIsInt || operandIsFloat))) {
+		if (!(currentIsInt || currentIsFloat)) {
+			runtimePanic(vm, TYPE, "Variable '%s' is not a number for '%s' operator.", name->chars, operation);
+		} else {
+			runtimePanic(vm, TYPE, "Right-hand operand for '%s' must be an 'int' or 'float'.", operation);
+		}
 		return INTERPRET_RUNTIME_ERROR;
 	}
-	switch (opcode) {
-		case OP_SET_GLOBAL_SLASH: {
-			if (AS_NUMBER(peek(vm, 0)) != 0.0) {
-				double result = AS_NUMBER(currentValue) / AS_NUMBER(peek(vm, 0));
-				tableSet(vm, &vm->globals, name, NUMBER_VAL(result), false);
+
+	Value resultValue;
+
+	if (currentIsInt && operandIsInt) {
+		int32_t icurrent = AS_INT(currentValue);
+		int32_t ioperand = AS_INT(operandValue);
+
+		switch (opcode) {
+			case OP_SET_GLOBAL_PLUS: {
+				// +=
+				int64_t result = (int64_t) icurrent + (int64_t) ioperand;
+				if (result >= INT32_MIN && result <= INT32_MAX) {
+					resultValue = INT_VAL((int32_t)result);
+				} else {
+					resultValue = FLOAT_VAL((double)result);
+				}
 				break;
 			}
-			runtimePanic(vm, DIVISION_BY_ZERO, "Division by zero error: '%s'.", name->chars);
-			return INTERPRET_RUNTIME_ERROR;
+			case OP_SET_GLOBAL_MINUS: {
+				int64_t result = (int64_t) icurrent - (int64_t) ioperand;
+				if (result >= INT32_MIN && result <= INT32_MAX) {
+					resultValue = INT_VAL((int32_t)result);
+				} else {
+					resultValue = FLOAT_VAL((double)result);
+				}
+				break;
+			}
+			case OP_SET_GLOBAL_STAR: {
+				int64_t result = (int64_t) icurrent * (int64_t) ioperand;
+				if (result >= INT32_MIN && result <= INT32_MAX) {
+					resultValue = INT_VAL((int32_t)result);
+				} else {
+					resultValue = FLOAT_VAL((double)result);
+				}
+				break;
+			}
+			case OP_SET_GLOBAL_SLASH: {
+				if (ioperand == 0) {
+					runtimePanic(vm, DIVISION_BY_ZERO, "Division by zero in '%s %s'.", name->chars, operation);
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				resultValue = FLOAT_VAL((double)icurrent / (double)ioperand);
+				break;
+			}
+
+			case OP_SET_GLOBAL_INT_DIVIDE: {
+				if (ioperand == 0) {
+					runtimePanic(vm, RUNTIME, "Division by zero in '%s %s'.", name->chars, operation);
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				if (icurrent == INT32_MIN && ioperand == -1) {
+					resultValue = FLOAT_VAL(-(double)INT32_MIN); // Overflow
+				} else {
+					resultValue = INT_VAL(icurrent / ioperand);
+				}
+				break;
+			}
+
+			case OP_SET_GLOBAL_MODULUS: {
+				if (ioperand == 0) {
+					runtimePanic(vm, RUNTIME, "Division by zero in '%s %s'.", name->chars, operation);
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				if (icurrent == INT32_MIN && ioperand == -1) {
+					resultValue = INT_VAL(0);
+				} else {
+					resultValue = INT_VAL(icurrent % ioperand);
+				}
+				break;
+			}
+
+			default:
+				runtimePanic(vm, RUNTIME, "Unsupported compound assignment opcode %d for int/int.", opcode);
+				return INTERPRET_RUNTIME_ERROR;
 		}
-		case OP_SET_GLOBAL_STAR: {
-			double result = AS_NUMBER(currentValue) * AS_NUMBER(peek(vm, 0));
-			tableSet(vm, &vm->globals, name, NUMBER_VAL(result), false);
-			break;
+	} else {
+		double dcurrent = currentIsFloat ? AS_FLOAT(currentValue) : (double) AS_INT(currentValue);
+		double doperand = operandIsFloat ? AS_FLOAT(operandValue) : (double) AS_INT(operandValue);
+
+		switch (opcode) {
+			case OP_SET_GLOBAL_PLUS: {
+				resultValue = FLOAT_VAL(dcurrent + doperand);
+				break;
+			}
+			case OP_SET_GLOBAL_MINUS: {
+				resultValue = FLOAT_VAL(dcurrent - doperand);
+				break;
+			}
+			case OP_SET_GLOBAL_STAR: {
+				resultValue = FLOAT_VAL(dcurrent * doperand);
+				break;
+			}
+			case OP_SET_GLOBAL_SLASH: {
+				if (doperand == 0.0) {
+					runtimePanic(vm, DIVISION_BY_ZERO, "Division by zero in '%s %s'.", name->chars, operation);
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				resultValue = FLOAT_VAL(dcurrent / doperand);
+				break;
+			}
+
+			case OP_SET_GLOBAL_INT_DIVIDE:
+			case OP_SET_GLOBAL_MODULUS: {
+				runtimePanic(vm, TYPE, "Operands for integer compound assignment '%s' must both be integers.", operation);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			default:
+				runtimePanic(vm, RUNTIME, "Unsupported compound assignment opcode %d for float/mixed.", opcode);
+				return INTERPRET_RUNTIME_ERROR;
 		}
-		case OP_SET_GLOBAL_PLUS: {
-			double result = AS_NUMBER(currentValue) + AS_NUMBER(peek(vm, 0));
-			tableSet(vm, &vm->globals, name, NUMBER_VAL(result), false);
-			break;
-		}
-		case OP_SET_GLOBAL_MINUS: {
-			double result = AS_NUMBER(currentValue) - AS_NUMBER(peek(vm, 0));
-			tableSet(vm, &vm->globals, name, NUMBER_VAL(result), false);
-			break;
-		}
-		default: ;
 	}
+
+	if (!tableSet(vm, &vm->globals, name, resultValue, false)) {
+		runtimePanic(vm, RUNTIME, "Failed to set global variable '%s' after compound assignment.", name->chars);
+		return INTERPRET_RUNTIME_ERROR;
+	}
+
 	return INTERPRET_OK;
 }
 
@@ -697,7 +887,6 @@ static bool checkPreviousInstruction(CallFrame *frame, int instructionsAgo, OpCo
 	return *(current - (instructionsAgo + 2)) == instruction; // +2 to account for offset
 }
 
-
 /**
  * Executes bytecode in the virtual machine.
  * @param vm The virtual machine
@@ -710,8 +899,1300 @@ static InterpretResult run(VM *vm) {
 #define READ_CONSTANT() (frame->closure->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_CRUX_STRING(READ_CONSTANT())
 #define READ_SHORT() (frame->ip += 2, (uint16_t) ((frame->ip[-2] << 8) | frame->ip[-1]))
+
+
+	static void *dispatchTable[] = {
+		&& OP_RETURN,
+		&& OP_CONSTANT,
+		&& OP_NIL,
+		&& OP_TRUE,
+		&& OP_FALSE,
+		&& OP_NEGATE,
+		&& OP_EQUAL,
+		&& OP_GREATER,
+		&& OP_LESS,
+		&& OP_LESS_EQUAL,
+		&& OP_GREATER_EQUAL,
+		&& OP_NOT_EQUAL,
+		&& OP_ADD,
+		&& OP_NOT,
+		&& OP_SUBTRACT,
+		&& OP_MULTIPLY,
+		&& OP_DIVIDE,
+		&& OP_POP,
+		&& OP_DEFINE_GLOBAL,
+		&& OP_GET_GLOBAL,
+		&& OP_SET_GLOBAL,
+		&& OP_GET_LOCAL,
+		&& OP_SET_LOCAL,
+		&& OP_JUMP_IF_FALSE,
+		&& OP_JUMP,
+		&& OP_LOOP,
+		&& OP_CALL,
+		&& OP_CLOSURE,
+		&& OP_GET_UPVALUE,
+		&& OP_SET_UPVALUE,
+		&& OP_CLOSE_UPVALUE,
+		&& OP_CLASS,
+		&& OP_GET_PROPERTY,
+		&& OP_SET_PROPERTY,
+		&& OP_INVOKE,
+		&& OP_METHOD,
+		&& OP_INHERIT,
+		&& OP_GET_SUPER,
+		&& OP_SUPER_INVOKE,
+		&& OP_ARRAY,
+		&& OP_GET_COLLECTION,
+		&& OP_SET_COLLECTION,
+		&& OP_MODULUS,
+		&& OP_LEFT_SHIFT,
+		&& OP_RIGHT_SHIFT,
+		&& OP_SET_LOCAL_SLASH,
+		&& OP_SET_LOCAL_STAR,
+		&& OP_SET_LOCAL_PLUS,
+		&& OP_SET_LOCAL_MINUS,
+		&& OP_SET_UPVALUE_SLASH,
+		&& OP_SET_UPVALUE_STAR,
+		&& OP_SET_UPVALUE_PLUS,
+		&& OP_SET_UPVALUE_MINUS,
+		&& OP_SET_GLOBAL_SLASH,
+		&& OP_SET_GLOBAL_STAR,
+		&& OP_SET_GLOBAL_PLUS,
+		&& OP_SET_GLOBAL_MINUS,
+		&& OP_TABLE,
+		&& OP_ANON_FUNCTION,
+		&& OP_USE,
+		&& OP_PUB,
+		&& OP_MATCH,
+		&& OP_MATCH_JUMP,
+		&& OP_MATCH_END,
+		&& OP_RESULT_MATCH_OK,
+		&& OP_RESULT_MATCH_ERR,
+		&& OP_RESULT_BIND,
+		&& OP_GIVE,
+		&& OP_INT_DIVIDE,
+		&& OP_POWER,
+		&& OP_SET_GLOBAL_INT_DIVIDE,
+		&& OP_SET_GLOBAL_MODULUS,
+		&& OP_SET_LOCAL_INT_DIVIDE,
+		&& OP_SET_LOCAL_MODULUS,
+		&& OP_SET_UPVALUE_INT_DIVIDE,
+		&& OP_SET_UPVALUE_MODULUS,
+		&& end
+	};
+
 	uint8_t instruction;
-	for (;;) {
+	instruction = READ_BYTE();
+	goto* dispatchTable[instruction];
+	static uint8_t endIndex = sizeof(dispatchTable) / sizeof(dispatchTable[0]) - 1;
+
+
+OP_RETURN: {
+		Value result = pop(vm);
+		closeUpvalues(vm, frame->slots);
+		vm->frameCount--;
+		if (vm->frameCount == 0) {
+			pop(vm);
+			return INTERPRET_OK;
+		}
+		vm->stackTop = frame->slots;
+		push(vm, result);
+		frame = &vm->frames[vm->frameCount - 1];
+		goto* dispatchTable[endIndex];
+	}
+
+OP_CONSTANT: {
+		Value constant = READ_CONSTANT();
+		push(vm, constant);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_NIL: {
+		push(vm, NIL_VAL);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_TRUE: {
+		push(vm, BOOL_VAL(true));
+		goto* dispatchTable[endIndex];
+	}
+
+OP_FALSE: {
+		push(vm, BOOL_VAL(false));
+		goto* dispatchTable[endIndex];
+	}
+
+OP_NEGATE: {
+		Value operand = peek(vm, 0);
+		if (IS_INT(operand)) {
+			int32_t iVal = AS_INT(operand);
+			if (iVal == INT32_MIN) {
+				popPush(vm, FLOAT_VAL(-(double)INT32_MIN));
+			} else {
+				popPush(vm, INT_VAL(-iVal));
+			}
+		} else if (IS_FLOAT(operand)) {
+			popPush(vm, FLOAT_VAL(-AS_FLOAT(operand)));
+		} else {
+			pop(vm);
+			runtimePanic(vm, TYPE, typeErrorMessage(vm, operand, "'int' | 'float'"));
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		runtimePanic(vm, TYPE, typeErrorMessage(vm, operand, "'int' | 'float'"));
+		return INTERPRET_RUNTIME_ERROR;
+	}
+
+OP_EQUAL: {
+		Value b = pop(vm);
+		Value a = pop(vm);
+		push(vm, BOOL_VAL(valuesEqual(a, b)));
+		goto* dispatchTable[endIndex];
+	}
+
+OP_GREATER: {
+		if (!binaryOperation(vm, OP_GREATER)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_LESS: {
+		if (!binaryOperation(vm, OP_LESS)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_LESS_EQUAL: {
+		if (!binaryOperation(vm, OP_LESS_EQUAL)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_GREATER_EQUAL: {
+		if (!binaryOperation(vm, OP_GREATER_EQUAL)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_NOT_EQUAL: {
+		Value b = pop(vm);
+		Value a = pop(vm);
+		push(vm, BOOL_VAL(!valuesEqual(a, b)));
+		goto* dispatchTable[endIndex];
+	}
+
+OP_ADD: {
+		if (IS_CRUX_STRING(peek(vm, 0)) || IS_CRUX_STRING(peek(vm, 1))) {
+			if (!concatenate(vm)) {
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			goto* dispatchTable[endIndex];
+		}
+		if (!binaryOperation(vm, OP_ADD)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_NOT: {
+		push(vm, BOOL_VAL(isFalsy(pop(vm))));
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SUBTRACT: {
+		if (!binaryOperation(vm, OP_SUBTRACT)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_MULTIPLY: {
+		if (!binaryOperation(vm, OP_MULTIPLY)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_DIVIDE: {
+		if (!binaryOperation(vm, OP_DIVIDE)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_POP: {
+		pop(vm);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_DEFINE_GLOBAL: {
+		ObjectString *name = READ_STRING();
+		bool isPublic = false;
+		if (checkPreviousInstruction(frame, 3, OP_PUB)) {
+			isPublic = true;
+		}
+		if (tableSet(vm, &vm->globals, name, peek(vm, 0), isPublic)) {
+			pop(vm);
+			goto* dispatchTable[endIndex];
+		}
+		runtimePanic(vm, NAME, "Cannot define '%s' because it is already defined.", name->chars);
+		return INTERPRET_RUNTIME_ERROR;
+	}
+
+OP_GET_GLOBAL: {
+		ObjectString *name = READ_STRING();
+		Value value;
+		if (tableGet(&vm->globals, name, &value)) {
+			push(vm, value);
+			goto* dispatchTable[endIndex];
+		}
+		runtimePanic(vm, NAME, "Undefined variable '%s'.", name->chars);
+		return INTERPRET_RUNTIME_ERROR;
+	}
+
+OP_SET_GLOBAL: {
+		ObjectString *name = READ_STRING();
+		if (tableSet(vm, &vm->globals, name, peek(vm, 0), false)) {
+			runtimePanic(vm, NAME, "Cannot give variable '%s' a value because it has not been defined",
+			             name->chars);
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_GET_LOCAL: {
+		uint8_t slot = READ_BYTE();
+		push(vm, frame->slots[slot]);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_LOCAL: {
+		uint8_t slot = READ_BYTE();
+		frame->slots[slot] = peek(vm, 0);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_JUMP_IF_FALSE: {
+		uint16_t offset = READ_SHORT();
+		if (isFalsy(peek(vm, 0))) {
+			frame->ip += offset;
+			goto* dispatchTable[endIndex];
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_JUMP: {
+		uint16_t offset = READ_SHORT();
+		frame->ip += offset;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_LOOP: {
+		uint16_t offset = READ_SHORT();
+		frame->ip -= offset;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_CALL: {
+		int argCount = READ_BYTE();
+		if (!callValue(vm, peek(vm, argCount), argCount)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		frame = &vm->frames[vm->frameCount - 1];
+		goto* dispatchTable[endIndex];
+	}
+
+OP_CLOSURE: {
+		ObjectFunction *function = AS_CRUX_FUNCTION(READ_CONSTANT());
+		ObjectClosure *closure = newClosure(vm, function);
+		push(vm, OBJECT_VAL(closure));
+
+		for (int i = 0; i < closure->upvalueCount; i++) {
+			uint8_t isLocal = READ_BYTE();
+			uint8_t index = READ_BYTE();
+
+			if (isLocal) {
+				closure->upvalues[i] = captureUpvalue(vm, frame->slots + index);
+			} else {
+				closure->upvalues[i] = frame->closure->upvalues[index];
+			}
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_GET_UPVALUE: {
+		uint8_t slot = READ_BYTE();
+		push(vm, *frame->closure->upvalues[slot]->location);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_UPVALUE: {
+		uint8_t slot = READ_BYTE();
+		*frame->closure->upvalues[slot]->location = peek(vm, 0);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_CLOSE_UPVALUE: {
+		closeUpvalues(vm, vm->stackTop - 1);
+		pop(vm);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_CLASS: {
+		push(vm, OBJECT_VAL(newClass(vm, READ_STRING())));
+		goto* dispatchTable[endIndex];
+	}
+
+OP_GET_PROPERTY: {
+		Value receiver = peek(vm, 0);
+		if (!IS_CRUX_INSTANCE(receiver)) {
+			ObjectString *name = READ_STRING();
+			runtimePanic(vm, TYPE,
+			             "Cannot access property '%s' on non-instance value. %s",
+			             name->chars, typeErrorMessage(vm, receiver, "instance"));
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		ObjectInstance *instance = AS_CRUX_INSTANCE(receiver);
+		ObjectString *name = READ_STRING();
+
+		Value value;
+		bool fieldFound = false;
+		if (tableGet(&instance->fields, name, &value)) {
+			pop(vm);
+			push(vm, value);
+			fieldFound = true;
+			goto* dispatchTable[endIndex];
+		}
+
+		if (!fieldFound) {
+			if (!bindMethod(vm, instance->klass, name)) {
+				runtimePanic(vm, RUNTIME, "Failed to bind method '%s'", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_PROPERTY: {
+		Value receiver = peek(vm, 1);
+		if (!IS_CRUX_INSTANCE(receiver)) {
+			ObjectString *name = READ_STRING();
+			runtimePanic(vm, TYPE,
+			             "Cannot set property '%s' on non-instance value. %s",
+			             name->chars, typeErrorMessage(vm, receiver, "instance"));
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		ObjectInstance *instance = AS_CRUX_INSTANCE(receiver);
+		ObjectString *name = READ_STRING();
+
+		if (tableSet(vm, &instance->fields, name, peek(vm, 0), false)) {
+			Value value = pop(vm);
+			popPush(vm, value);
+			goto* dispatchTable[endIndex];
+		}
+		runtimePanic(vm, NAME, "Cannot set undefined property '%s'.", name->chars);
+		return INTERPRET_RUNTIME_ERROR;
+	}
+
+OP_INVOKE: {
+		ObjectString *methodName = READ_STRING();
+		int argCount = READ_BYTE();
+		if (!invoke(vm, methodName, argCount)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		frame = &vm->frames[vm->frameCount - 1];
+		goto* dispatchTable[endIndex];
+	}
+
+OP_METHOD: {
+		defineMethod(vm, READ_STRING());
+		goto* dispatchTable[endIndex];
+	}
+
+OP_INHERIT: {
+		Value superClass = peek(vm, 1);
+
+		if (!IS_CRUX_CLASS(superClass)) {
+			runtimePanic(vm, TYPE, "Cannot inherit from non class object.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		ObjectClass *subClass = AS_CRUX_CLASS(peek(vm, 0));
+		tableAddAll(vm, &AS_CRUX_CLASS(superClass)->methods, &subClass->methods);
+		pop(vm);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_GET_SUPER: {
+		ObjectString *name = READ_STRING();
+		ObjectClass *superClass = AS_CRUX_CLASS(pop(vm));
+
+		if (!bindMethod(vm, superClass, name)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SUPER_INVOKE: {
+		ObjectString *method = READ_STRING();
+		int argCount = READ_BYTE();
+		ObjectClass *superClass = AS_CRUX_CLASS(pop(vm));
+		if (!invokeFromClass(vm, superClass, method, argCount)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		frame = &vm->frames[vm->frameCount - 1];
+		goto* dispatchTable[endIndex];
+	}
+
+OP_ARRAY: {
+		uint16_t elementCount = READ_SHORT();
+		ObjectArray *array = newArray(vm, elementCount);
+		for (int i = elementCount - 1; i >= 0; i--) {
+			arrayAdd(vm, array, pop(vm), i);
+		}
+		push(vm, OBJECT_VAL(array));
+		goto* dispatchTable[endIndex];
+	}
+
+OP_GET_COLLECTION: {
+		Value indexValue = pop(vm);
+		if (!IS_CRUX_OBJECT(peek(vm, 0))) {
+			runtimePanic(vm, TYPE, "Cannot get from a non-collection type.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		switch (AS_CRUX_OBJECT(peek(vm, 0))->type) {
+			case OBJECT_TABLE: {
+				if (IS_CRUX_STRING(indexValue) || IS_INT(indexValue)) {
+					ObjectTable *table = AS_CRUX_TABLE(peek(vm, 0));
+					Value value;
+					if (!objectTableGet(table, indexValue, &value)) {
+						runtimePanic(vm, COLLECTION_GET, "Failed to get value from table");
+						return INTERPRET_RUNTIME_ERROR;
+					}
+					popPush(vm, value);
+				} else {
+					runtimePanic(vm, TYPE, "Key cannot be hashed.", READ_STRING());
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				goto* dispatchTable[endIndex];
+			}
+			case OBJECT_ARRAY: {
+				if (!IS_INT(indexValue)) {
+					runtimePanic(vm, TYPE, "Index must be of type 'int'.");
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				int index = AS_INT(indexValue);
+				ObjectArray *array = AS_CRUX_ARRAY(peek(vm, 0));
+				Value value;
+				if (index < 0 || index >= array->size) {
+					runtimePanic(vm, INDEX_OUT_OF_BOUNDS, "Index out of bounds.");
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				if (!arrayGet(array, index, &value)) {
+					runtimePanic(vm, COLLECTION_GET, "Failed to get value from array");
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				popPush(vm, value); // pop the array off the stack // push the value onto the stack
+				goto* dispatchTable[endIndex];
+			}
+			case OBJECT_STRING: {
+				if (!IS_INT(indexValue)) {
+					runtimePanic(vm, TYPE, "Index must be of type 'int'.");
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				int index = AS_INT(indexValue);
+				ObjectString *string = AS_CRUX_STRING(peek(vm, 0));
+				ObjectString *ch;
+				if (index < 0 || index >= string->length) {
+					runtimePanic(vm, INDEX_OUT_OF_BOUNDS, "Index out of bounds.");
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				// Only single character indexing
+				ch = copyString(vm, string->chars + index, 1);
+				popPush(vm, OBJECT_VAL(ch));
+				goto* dispatchTable[endIndex];
+			}
+			default: {
+				runtimePanic(vm, TYPE, "Cannot get from a non-collection type.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_COLLECTION: {
+		Value value = pop(vm);
+		Value indexValue = peek(vm, 0);
+
+		if (IS_CRUX_TABLE(peek(vm, 1))) {
+			ObjectTable *table = AS_CRUX_TABLE(peek(vm, 1));
+			if (IS_INT(indexValue) || IS_CRUX_STRING(indexValue)) {
+				if (!objectTableSet(vm, table, indexValue, value)) {
+					runtimePanic(vm, COLLECTION_GET, "Failed to set value in table");
+					return INTERPRET_RUNTIME_ERROR;
+				}
+			} else {
+				runtimePanic(vm, TYPE, "Key cannot be hashed.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+		} else if (IS_CRUX_ARRAY(peek(vm, 1))) {
+			ObjectArray *array = AS_CRUX_ARRAY(peek(vm, 1));
+			int index = AS_INT(indexValue);
+			if (!arraySet(vm, array, index, value)) {
+				runtimePanic(vm, COLLECTION_SET, "Failed to set value in array");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+		} else {
+			runtimePanic(vm, TYPE, "Value is not a mutable collection type.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		popTwo(vm); // indexValue and collection
+		push(vm, indexValue);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_MODULUS: {
+		if (!binaryOperation(vm, OP_MODULUS)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_LEFT_SHIFT: {
+		if (!binaryOperation(vm, OP_LEFT_SHIFT)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_RIGHT_SHIFT: {
+		if (!binaryOperation(vm, OP_RIGHT_SHIFT)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_LOCAL_SLASH: {
+		uint8_t slot = READ_BYTE();
+		Value currentValue = frame->slots[slot];
+		Value operandValue = peek(vm, 0); // Right-hand side
+
+		bool currentIsInt = IS_INT(currentValue);
+		bool currentIsFloat = IS_FLOAT(currentValue);
+		bool operandIsInt = IS_INT(operandValue);
+		bool operandIsFloat = IS_FLOAT(operandValue);
+
+		if (!((currentIsInt || currentIsFloat) && (operandIsInt || operandIsFloat))) {
+			runtimePanic(vm, TYPE, "Operands for '/=' must be numbers.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		Value resultValue;
+
+		double dcurrent = currentIsFloat ? AS_FLOAT(currentValue) : (double) AS_INT(currentValue);
+		double doperand = operandIsFloat ? AS_FLOAT(operandValue) : (double) AS_INT(operandValue);
+
+		if (doperand == 0.0) {
+			runtimePanic(vm, DIVISION_BY_ZERO, "Division by zero in '/=' assignment.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		resultValue = FLOAT_VAL(dcurrent / doperand);
+		frame->slots[slot] = resultValue;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_LOCAL_STAR: {
+		uint8_t slot = READ_BYTE();
+		Value currentValue = frame->slots[slot];
+		Value operandValue = peek(vm, 0);
+
+		bool currentIsInt = IS_INT(currentValue);
+		bool currentIsFloat = IS_FLOAT(currentValue);
+		bool operandIsInt = IS_INT(operandValue);
+		bool operandIsFloat = IS_FLOAT(operandValue);
+
+		if (!((currentIsInt || currentIsFloat) && (operandIsInt || operandIsFloat))) {
+			runtimePanic(vm, TYPE, "Operands for '*=' must be numbers.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		Value resultValue;
+
+		if (currentIsInt && operandIsInt) {
+			int32_t icurrent = AS_INT(currentValue);
+			int32_t ioperand = AS_INT(operandValue);
+			int64_t result = (int64_t) icurrent * (int64_t) ioperand;
+			if (result >= INT32_MIN && result <= INT32_MAX) {
+				resultValue = INT_VAL((int32_t)result);
+			} else {
+				resultValue = FLOAT_VAL((double)result); // Promote
+			}
+		} else {
+			double dcurrent = currentIsFloat ? AS_FLOAT(currentValue) : (double) AS_INT(currentValue);
+			double doperand = operandIsFloat ? AS_FLOAT(operandValue) : (double) AS_INT(operandValue);
+			resultValue = FLOAT_VAL(dcurrent * doperand);
+		}
+
+		frame->slots[slot] = resultValue;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_LOCAL_PLUS: {
+		uint8_t slot = READ_BYTE();
+		Value currentValue = frame->slots[slot];
+		Value operandValue = peek(vm, 0);
+
+		bool currentIsInt = IS_INT(currentValue);
+		bool currentIsFloat = IS_FLOAT(currentValue);
+		bool operandIsInt = IS_INT(operandValue);
+		bool operandIsFloat = IS_FLOAT(operandValue);
+
+		if (IS_CRUX_STRING(currentValue) || IS_CRUX_STRING(operandValue)) {
+			push(vm, currentValue);
+			if (!concatenate(vm)) {
+				pop(vm);
+
+				return INTERPRET_RUNTIME_ERROR;
+			}
+
+			frame->slots[slot] = peek(vm, 0);
+		}
+
+		else if ((currentIsInt || currentIsFloat) && (operandIsInt || operandIsFloat)) {
+			Value resultValue;
+			if (currentIsInt && operandIsInt) {
+				int32_t icurrent = AS_INT(currentValue);
+				int32_t ioperand = AS_INT(operandValue);
+				int64_t result = (int64_t) icurrent + (int64_t) ioperand;
+				if (result >= INT32_MIN && result <= INT32_MAX) {
+					resultValue = INT_VAL((int32_t)result);
+				} else {
+					resultValue = FLOAT_VAL((double)result); // Promote
+				}
+			} else {
+				double dcurrent = currentIsFloat ? AS_FLOAT(currentValue) : (double) AS_INT(currentValue);
+				double doperand = operandIsFloat ? AS_FLOAT(operandValue) : (double) AS_INT(operandValue);
+				resultValue = FLOAT_VAL(dcurrent + doperand);
+			}
+			frame->slots[slot] = resultValue;
+		}
+
+		else {
+			runtimePanic(vm, TYPE, "Operands for '+=' must be of type 'float' | 'int' | 'string'.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_LOCAL_MINUS: {
+		uint8_t slot = READ_BYTE();
+		Value currentValue = frame->slots[slot];
+		Value operandValue = peek(vm, 0);
+
+		bool currentIsInt = IS_INT(currentValue);
+		bool currentIsFloat = IS_FLOAT(currentValue);
+		bool operandIsInt = IS_INT(operandValue);
+		bool operandIsFloat = IS_FLOAT(operandValue);
+
+		if (!((currentIsInt || currentIsFloat) && (operandIsInt || operandIsFloat))) {
+			runtimePanic(vm, TYPE, "Operands for '-=' must be numbers.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		Value resultValue;
+
+		if (currentIsInt && operandIsInt) {
+			int32_t icurrent = AS_INT(currentValue);
+			int32_t ioperand = AS_INT(operandValue);
+			int64_t result = (int64_t) icurrent - (int64_t) ioperand;
+			if (result >= INT32_MIN && result <= INT32_MAX) {
+				resultValue = INT_VAL((int32_t)result);
+			} else {
+				resultValue = FLOAT_VAL((double)result);
+			}
+		} else {
+			double dcurrent = currentIsFloat ? AS_FLOAT(currentValue) : (double) AS_INT(currentValue);
+			double doperand = operandIsFloat ? AS_FLOAT(operandValue) : (double) AS_INT(operandValue);
+			resultValue = FLOAT_VAL(dcurrent - doperand);
+		}
+
+		frame->slots[slot] = resultValue;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_UPVALUE_SLASH: {
+		uint8_t slot = READ_BYTE();
+		Value *location = frame->closure->upvalues[slot]->location;
+		Value currentValue = *location;
+		Value operandValue = peek(vm, 0);
+
+		bool currentIsInt = IS_INT(currentValue);
+		bool currentIsFloat = IS_FLOAT(currentValue);
+		bool operandIsInt = IS_INT(operandValue);
+		bool operandIsFloat = IS_FLOAT(operandValue);
+
+		if (!((currentIsInt || currentIsFloat) && (operandIsInt || operandIsFloat))) {
+			runtimePanic(vm, TYPE, "Operands for '/=' must be numbers.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		Value resultValue;
+
+		double dcurrent = currentIsFloat ? AS_FLOAT(currentValue) : (double) AS_INT(currentValue);
+		double doperand = operandIsFloat ? AS_FLOAT(operandValue) : (double) AS_INT(operandValue);
+
+		if (doperand == 0.0) {
+			runtimePanic(vm, DIVISION_BY_ZERO, "Division by zero in '/=' assignment.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		resultValue = FLOAT_VAL(dcurrent / doperand);
+		*location = resultValue;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_UPVALUE_STAR: {
+		uint8_t slot = READ_BYTE();
+		Value *location = frame->closure->upvalues[slot]->location;
+		Value currentValue = *location;
+		Value operandValue = peek(vm, 0);
+
+		bool currentIsInt = IS_INT(currentValue);
+		bool currentIsFloat = IS_FLOAT(currentValue);
+		bool operandIsInt = IS_INT(operandValue);
+		bool operandIsFloat = IS_FLOAT(operandValue);
+
+		if (!((currentIsInt || currentIsFloat) && (operandIsInt || operandIsFloat))) {
+			runtimePanic(vm, TYPE, "Operands for '*=' must be numbers.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		Value resultValue;
+
+		if (currentIsInt && operandIsInt) {
+			int32_t icurrent = AS_INT(currentValue);
+			int32_t ioperand = AS_INT(operandValue);
+			int64_t result = (int64_t) icurrent * (int64_t) ioperand;
+			if (result >= INT32_MIN && result <= INT32_MAX) {
+				resultValue = INT_VAL((int32_t)result);
+			} else {
+				resultValue = FLOAT_VAL((double)result);
+			}
+		} else {
+			double dcurrent = currentIsFloat ? AS_FLOAT(currentValue) : (double) AS_INT(currentValue);
+			double doperand = operandIsFloat ? AS_FLOAT(operandValue) : (double) AS_INT(operandValue);
+			resultValue = FLOAT_VAL(dcurrent * doperand);
+		}
+
+		*location = resultValue;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_UPVALUE_PLUS: {
+		uint8_t slot = READ_BYTE();
+		Value *location = frame->closure->upvalues[slot]->location;
+		Value currentValue = *location;
+		Value operandValue = peek(vm, 0);
+
+		bool currentIsInt = IS_INT(currentValue);
+		bool currentIsFloat = IS_FLOAT(currentValue);
+		bool operandIsInt = IS_INT(operandValue);
+		bool operandIsFloat = IS_FLOAT(operandValue);
+
+		if (IS_CRUX_STRING(currentValue) || IS_CRUX_STRING(operandValue)) {
+			push(vm, currentValue);
+			if (!concatenate(vm)) {
+				pop(vm);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			*location = peek(vm, 0);
+		}
+
+		else if ((currentIsInt || currentIsFloat) && (operandIsInt || operandIsFloat)) {
+			Value resultValue;
+			if (currentIsInt && operandIsInt) {
+				int32_t icurrent = AS_INT(currentValue);
+				int32_t ioperand = AS_INT(operandValue);
+				int64_t result = (int64_t) icurrent + (int64_t) ioperand;
+				if (result >= INT32_MIN && result <= INT32_MAX) {
+					resultValue = INT_VAL((int32_t)result);
+				} else {
+					resultValue = FLOAT_VAL((double)result);
+				}
+			} else {
+				double dcurrent = currentIsFloat ? AS_FLOAT(currentValue) : (double) AS_INT(currentValue);
+				double doperand = operandIsFloat ? AS_FLOAT(operandValue) : (double) AS_INT(operandValue);
+				resultValue = FLOAT_VAL(dcurrent + doperand);
+			}
+			*location = resultValue;
+		}
+		else {
+			runtimePanic(vm, TYPE, "Operands for '+=' must be numbers or strings.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_UPVALUE_MINUS: {
+		uint8_t slot = READ_BYTE();
+		Value *location = frame->closure->upvalues[slot]->location;
+		Value currentValue = *location;
+		Value operandValue = peek(vm, 0);
+
+		bool currentIsInt = IS_INT(currentValue);
+		bool currentIsFloat = IS_FLOAT(currentValue);
+		bool operandIsInt = IS_INT(operandValue);
+		bool operandIsFloat = IS_FLOAT(operandValue);
+
+		if (!((currentIsInt || currentIsFloat) && (operandIsInt || operandIsFloat))) {
+			runtimePanic(vm, TYPE, "Operands for '-=' must be numbers.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		Value resultValue;
+
+		if (currentIsInt && operandIsInt) {
+			int32_t icurrent = AS_INT(currentValue);
+			int32_t ioperand = AS_INT(operandValue);
+			int64_t result = (int64_t) icurrent - (int64_t) ioperand;
+			if (result >= INT32_MIN && result <= INT32_MAX) {
+				resultValue = INT_VAL((int32_t)result);
+			} else {
+				resultValue = FLOAT_VAL((double)result);
+			}
+		} else {
+			double dcurrent = currentIsFloat ? AS_FLOAT(currentValue) : (double) AS_INT(currentValue);
+			double doperand = operandIsFloat ? AS_FLOAT(operandValue) : (double) AS_INT(operandValue);
+			resultValue = FLOAT_VAL(dcurrent - doperand);
+		}
+
+		*location = resultValue;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_GLOBAL_SLASH: {
+		ObjectString *name = READ_STRING();
+		if (globalCompoundOperation(vm, name, OP_SET_GLOBAL_SLASH, "/=") == INTERPRET_RUNTIME_ERROR) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_GLOBAL_STAR: {
+		ObjectString *name = READ_STRING();
+		if (globalCompoundOperation(vm, name, OP_SET_GLOBAL_STAR, "*=") == INTERPRET_RUNTIME_ERROR) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_GLOBAL_PLUS: {
+		ObjectString *name = READ_STRING();
+		if (globalCompoundOperation(vm, name, OP_SET_GLOBAL_PLUS, "+=") == INTERPRET_RUNTIME_ERROR) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_GLOBAL_MINUS: {
+		ObjectString *name = READ_STRING();
+		if (globalCompoundOperation(vm, name, OP_SET_GLOBAL_MINUS, "-=") == INTERPRET_RUNTIME_ERROR) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_TABLE: {
+		uint16_t elementCount = READ_SHORT();
+		ObjectTable *table = newTable(vm, elementCount);
+		for (int i = elementCount - 1; i >= 0; i--) {
+			Value value = pop(vm);
+			Value key = pop(vm);
+			if (IS_INT(key) || IS_CRUX_STRING(key) || IS_FLOAT(key)) {
+				if (!objectTableSet(vm, table, key, value)) {
+					runtimePanic(vm, COLLECTION_SET, "Failed to set value in table");
+					return INTERPRET_RUNTIME_ERROR;
+				}
+			} else {
+				runtimePanic(vm, TYPE, "Key cannot be hashed.", READ_STRING());
+				return INTERPRET_RUNTIME_ERROR;
+			}
+		}
+		push(vm, OBJECT_VAL(table));
+		goto* dispatchTable[endIndex];
+	}
+
+OP_ANON_FUNCTION: {
+		ObjectFunction *function = AS_CRUX_FUNCTION(READ_CONSTANT());
+		ObjectClosure *closure = newClosure(vm, function);
+		push(vm, OBJECT_VAL(closure));
+		for (int i = 0; i < closure->upvalueCount; i++) {
+			uint8_t isLocal = READ_BYTE();
+			uint8_t index = READ_BYTE();
+
+			if (isLocal) {
+				closure->upvalues[i] = captureUpvalue(vm, frame->slots + index);
+			} else {
+				closure->upvalues[i] = frame->closure->upvalues[index];
+			}
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_USE: {
+		uint8_t nameCount = READ_BYTE();
+		ObjectString *names[UINT8_MAX];
+		ObjectString *aliases[UINT8_MAX];
+		for (int i = 0; i < nameCount; i++) {
+			names[i] = READ_STRING();
+		}
+		for (int i = 0; i < nameCount; i++) {
+			aliases[i] = READ_STRING();
+		}
+		ObjectString *modulePath = READ_STRING();
+
+		if (importSetContains(&vm->module->importedModules, modulePath)) {
+			runtimePanic(vm, IMPORT,
+			             "Module '%s' has already been imported. All imports must be done in a single 'use' statement.",
+			             modulePath->chars);
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		if (modulePath->length > 4 && memcmp(modulePath->chars, "crux:", 5) == 0) {
+			char *moduleName = modulePath->chars + 5;
+			int moduleIndex = -1;
+			for (int i = 0; i < vm->nativeModules.count; i++) {
+				if (memcmp(moduleName, vm->nativeModules.modules[i].name, strlen(moduleName)) == 0) {
+					moduleIndex = i;
+					break;
+				}
+			}
+			if (moduleIndex == -1) {
+				runtimePanic(vm, IMPORT, "Module '%s' does not exist.", modulePath->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+
+			Table *moduleTable = vm->nativeModules.modules[moduleIndex].names;
+			for (int i = 0; i < nameCount; i++) {
+				Value value;
+				bool getSuccess = tableGet(moduleTable, names[i], &value);
+				if (!getSuccess) {
+					runtimePanic(vm, IMPORT, "Failed to import '%s' from '%s'.", names[i]->chars,
+					             modulePath->chars);
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				push(vm, OBJECT_VAL(value));
+				bool setSuccess = false;
+				if (aliases[i] != NULL) {
+					setSuccess = tableSet(vm, &vm->globals, aliases[i], value, false);
+				} else {
+					setSuccess = tableSet(vm, &vm->globals, names[i], value, false);
+				}
+
+				if (!setSuccess) {
+					runtimePanic(vm, IMPORT, "Failed to import '%s' from '%s'.", names[i]->chars,
+					             modulePath->chars);
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				pop(vm);
+			}
+			importSetAdd(vm, &vm->module->importedModules, modulePath);
+			goto* dispatchTable[endIndex];
+		}
+
+		char *resolvedPath = resolvePath(vm->module->path->chars, modulePath->chars);
+		if (resolvedPath == NULL) {
+			runtimePanic(vm, IO, "Could not resolve path to module.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		FileResult source = readFile(resolvedPath);
+		if (source.error != NULL) {
+			runtimePanic(vm, IO, source.error);
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		if (vm->module->state == IN_PROGRESS) {
+			freeFileResult(source);
+			free(resolvedPath);
+			runtimePanic(vm, IMPORT, "Circular import detected in \"%s\".", modulePath->chars);
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		if (vm->module->vmDepth > MAX_VM_DEPTH) {
+			freeFileResult(source);
+			free(resolvedPath);
+			runtimePanic(vm, IMPORT, "Maximum import depth exceeded.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		VM *newModuleVM = newVM();
+		newModuleVM->enclosing = vm;
+
+		newModuleVM->module = newModule(newModuleVM, modulePath->chars);
+		newModuleVM->module->state = IN_PROGRESS;
+		newModuleVM->module->vmDepth = vm->module->vmDepth + 1;
+
+		InterpretResult result = interpret(newModuleVM, source.content);
+		freeFileResult(source);
+		free(resolvedPath);
+		if (result != INTERPRET_OK) {
+			freeVM(newModuleVM);
+			return result;
+		}
+
+		newModuleVM->module->state = IMPORTED;
+
+		// add the imported names to the current module (deep copy)
+		bool success = true;
+		for (int i = 0; i < nameCount; i++) {
+			if (aliases[i] != NULL && IS_CRUX_STRING(OBJECT_VAL(aliases[i]))) {
+				success = tableDeepCopy(newModuleVM, vm, &newModuleVM->globals, &vm->globals, names[i],
+				                        aliases[i]);
+			} else {
+				success = tableDeepCopy(newModuleVM, vm, &newModuleVM->globals, &vm->globals, names[i],
+				                        names[i]);
+			}
+			if (!success) {
+				for (int j = 0; j < i; j++) {
+					tableDelete(&vm->globals, names[j]);
+				}
+				runtimePanic(vm, NAME, "Failed to import '%s' from module '%s'.", names[i]->chars,
+				             modulePath->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+		}
+
+		importSetAdd(vm, &vm->module->importedModules, modulePath);
+		freeVM(newModuleVM);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_PUB: {
+		goto* dispatchTable[endIndex];
+	}
+
+OP_MATCH: {
+		Value target = peek(vm, 0);
+		vm->matchHandler.matchTarget = target;
+		vm->matchHandler.isMatchTarget = true;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_MATCH_JUMP: {
+		uint16_t offset = READ_SHORT();
+		Value pattern = pop(vm);
+		Value target = peek(vm, 0);
+		if (!valuesEqual(pattern, target)) {
+			frame->ip += offset;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_MATCH_END: {
+		if (vm->matchHandler.isMatchBind) {
+			push(vm, vm->matchHandler.matchBind);
+		}
+		vm->matchHandler.matchTarget = NIL_VAL;
+		vm->matchHandler.matchBind = NIL_VAL;
+		vm->matchHandler.isMatchBind = false;
+		vm->matchHandler.isMatchTarget = false;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_RESULT_MATCH_OK: {
+		uint16_t offset = READ_SHORT();
+		Value target = peek(vm, 0);
+		if (!IS_CRUX_RESULT(target) || !AS_CRUX_RESULT(target)->isOk) {
+			frame->ip += offset;
+		} else {
+			Value value = AS_CRUX_RESULT(target)->as.value;
+			popPush(vm, value);
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_RESULT_MATCH_ERR: {
+		uint16_t offset = READ_SHORT();
+		Value target = peek(vm, 0);
+		if (!IS_CRUX_RESULT(target) || AS_CRUX_RESULT(target)->isOk) {
+			frame->ip += offset;
+		} else {
+			Value error = OBJECT_VAL(AS_CRUX_RESULT(target)->as.error);
+			popPush(vm, error);
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_RESULT_BIND: {
+		uint8_t slot = READ_BYTE();
+		Value bind = peek(vm, 0);
+		vm->matchHandler.matchBind = bind;
+		vm->matchHandler.isMatchBind = true;
+		frame->slots[slot] = bind;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_GIVE: {
+		Value result = pop(vm);
+		popPush(vm, result);
+		goto* dispatchTable[endIndex];
+	}
+
+OP_INT_DIVIDE: {
+		if (!binaryOperation(vm, OP_INT_DIVIDE)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_POWER: {
+		if (!binaryOperation(vm, OP_POWER)) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_GLOBAL_INT_DIVIDE: {
+		ObjectString *name = READ_STRING();
+		if (globalCompoundOperation(vm, name, OP_SET_GLOBAL_INT_DIVIDE, "\\=") == INTERPRET_RUNTIME_ERROR) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_GLOBAL_MODULUS: {
+		ObjectString *name = READ_STRING();
+		if (globalCompoundOperation(vm, name, OP_SET_GLOBAL_MODULUS, "%=") == INTERPRET_RUNTIME_ERROR) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_LOCAL_INT_DIVIDE: {
+		uint8_t slot = READ_BYTE();
+		Value currentValue = frame->slots[slot];
+		Value operandValue = peek(vm, 0);
+
+		if (!IS_INT(currentValue) || !IS_INT(operandValue)) {
+			runtimePanic(vm, TYPE, "Operands for '//=' must both be integers.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		int32_t icurrent = AS_INT(currentValue);
+		int32_t ioperand = AS_INT(operandValue);
+
+		if (ioperand == 0) {
+			runtimePanic(vm, DIVISION_BY_ZERO, "Integer division by zero in '//=' assignment.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		Value resultValue;
+		if (icurrent == INT32_MIN && ioperand == -1) {
+			resultValue = FLOAT_VAL(-(double)INT32_MIN); // Promote
+		} else {
+			resultValue = INT_VAL(icurrent / ioperand);
+		}
+
+		frame->slots[slot] = resultValue;
+		goto* dispatchTable[endIndex];
+	}
+OP_SET_LOCAL_MODULUS: {
+		uint8_t slot = READ_BYTE();
+		Value currentValue = frame->slots[slot];
+		Value operandValue = peek(vm, 0);
+
+		if (!IS_INT(currentValue) || !IS_INT(operandValue)) {
+			runtimePanic(vm, TYPE, "Operands for '%=' must both be integers.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		int32_t icurrent = AS_INT(currentValue);
+		int32_t ioperand = AS_INT(operandValue);
+
+		if (ioperand == 0) {
+			runtimePanic(vm, DIVISION_BY_ZERO, "Modulo by zero in '%=' assignment.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		Value resultValue;
+		if (icurrent == INT32_MIN && ioperand == -1) {
+			resultValue = INT_VAL(0);
+		} else {
+			resultValue = INT_VAL(icurrent % ioperand);
+		}
+
+		frame->slots[slot] = resultValue;
+		goto* dispatchTable[endIndex];
+	}
+OP_SET_UPVALUE_INT_DIVIDE: {
+		uint8_t slot = READ_BYTE();
+		Value *location = frame->closure->upvalues[slot]->location;
+		Value currentValue = *location;
+		Value operandValue = peek(vm, 0);
+
+		if (!IS_INT(currentValue) || !IS_INT(operandValue)) {
+			runtimePanic(vm, TYPE, "Operands for '//=' must both be integers.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		int32_t icurrent = AS_INT(currentValue);
+		int32_t ioperand = AS_INT(operandValue);
+
+		if (ioperand == 0) {
+			runtimePanic(vm, DIVISION_BY_ZERO, "Integer division by zero in '//=' assignment.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		Value resultValue;
+		if (icurrent == INT32_MIN && ioperand == -1) {
+			resultValue = FLOAT_VAL(-(double)INT32_MIN); // Promote
+		} else {
+			resultValue = INT_VAL(icurrent / ioperand);
+		}
+
+		*location = resultValue;
+		goto* dispatchTable[endIndex];
+	}
+
+OP_SET_UPVALUE_MODULUS: {
+		uint8_t slot = READ_BYTE();
+		Value *location = frame->closure->upvalues[slot]->location;
+		Value currentValue = *location;
+		Value operandValue = peek(vm, 0);
+
+		if (!IS_INT(currentValue) || !IS_INT(operandValue)) {
+			runtimePanic(vm, TYPE, "Operands for '%=' must both be of type 'int'.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		int32_t icurrent = AS_INT(currentValue);
+		int32_t ioperand = AS_INT(operandValue);
+
+		if (ioperand == 0) {
+			runtimePanic(vm, DIVISION_BY_ZERO, "Modulo by zero in '%=' assignment.");
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		Value resultValue;
+		if (ioperand == -1 && icurrent == INT32_MIN) {
+			resultValue = INT_VAL(0);
+		} else {
+			resultValue = INT_VAL(icurrent % ioperand);
+		}
+
+		*location = resultValue;
+		goto* dispatchTable[endIndex];
+	}
+
+end: {
 #ifdef DEBUG_TRACE_EXECUTION
 		printf("        ");
 		for (Value *slot = vm->stack; slot < vm->stackTop; slot++) {
@@ -722,890 +2203,13 @@ static InterpretResult run(VM *vm) {
 		printf("\n");
 
 		disassembleInstruction(&frame->closure->function->chunk,
-		                       (int) (frame->ip - frame->closure->function->chunk.code));
+													 (int) (frame->ip - frame->closure->function->chunk.code));
 #endif
 
 		instruction = READ_BYTE();
-		switch (instruction) {
-			case OP_CONSTANT: {
-				Value constant = READ_CONSTANT();
-				push(vm, constant);
-				break;
-			}
-
-			case OP_RETURN: {
-				Value result = pop(vm);
-				closeUpvalues(vm, frame->slots);
-				vm->frameCount--;
-				if (vm->frameCount == 0) {
-					pop(vm);
-					return INTERPRET_OK;
-				}
-				vm->stackTop = frame->slots;
-				push(vm, result);
-				frame = &vm->frames[vm->frameCount - 1];
-				break;
-			}
-
-			case OP_CLOSURE: {
-				ObjectFunction *function = AS_CRUX_FUNCTION(READ_CONSTANT());
-				ObjectClosure *closure = newClosure(vm, function);
-				push(vm, OBJECT_VAL(closure));
-
-				for (int i = 0; i < closure->upvalueCount; i++) {
-					uint8_t isLocal = READ_BYTE();
-					uint8_t index = READ_BYTE();
-
-					if (isLocal) {
-						closure->upvalues[i] = captureUpvalue(vm, frame->slots + index);
-					} else {
-						closure->upvalues[i] = frame->closure->upvalues[index];
-					}
-				}
-				break;
-			}
-
-			case OP_NIL: {
-				push(vm, NIL_VAL);
-				break;
-			}
-
-			case OP_TRUE: {
-				push(vm, BOOL_VAL(true));
-				break;
-			}
-
-			case OP_FALSE: {
-				push(vm, BOOL_VAL(false));
-				break;
-			}
-
-			case OP_EQUAL: {
-				Value b = pop(vm);
-				Value a = pop(vm);
-				push(vm, BOOL_VAL(valuesEqual(a, b)));
-				break;
-			}
-
-			case OP_NOT_EQUAL: {
-				Value b = pop(vm);
-				Value a = pop(vm);
-				push(vm, BOOL_VAL(!valuesEqual(a, b)));
-				break;
-			}
-
-			case OP_GREATER: {
-				if (!binaryOperation(vm, OP_GREATER)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_LESS: {
-				if (!binaryOperation(vm, OP_LESS)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_LESS_EQUAL: {
-				if (!binaryOperation(vm, OP_LESS_EQUAL)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_GREATER_EQUAL: {
-				if (!binaryOperation(vm, OP_GREATER_EQUAL)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_NEGATE: {
-				Value operand = peek(vm, 0);
-				if (IS_NUMBER(operand)) {
-					push(vm, NUMBER_VAL(-AS_NUMBER(pop(vm))));
-					break;
-				}
-				runtimePanic(vm, TYPE, typeErrorMessage(vm, operand, "number"));
-				return INTERPRET_RUNTIME_ERROR;
-			}
-
-			case OP_ADD: {
-				if (IS_CRUX_STRING(peek(vm, 0)) || IS_CRUX_STRING(peek(vm, 1))) {
-					if (!concatenate(vm)) {
-						return INTERPRET_RUNTIME_ERROR;
-					}
-					break;
-				}
-				if (!binaryOperation(vm, OP_ADD)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_SUBTRACT: {
-				if (!binaryOperation(vm, OP_SUBTRACT)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_MULTIPLY: {
-				if (!binaryOperation(vm, OP_MULTIPLY)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_POWER: {
-				if (!binaryOperation(vm, OP_POWER)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_DIVIDE: {
-				if (!binaryOperation(vm, OP_DIVIDE)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_INT_DIVIDE: {
-				if (!binaryOperation(vm, OP_INT_DIVIDE)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-			case OP_MODULUS: {
-				if (!binaryOperation(vm, OP_MODULUS)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_LEFT_SHIFT: {
-				if (!binaryOperation(vm, OP_LEFT_SHIFT)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_RIGHT_SHIFT: {
-				if (!binaryOperation(vm, OP_RIGHT_SHIFT)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_NOT: {
-				push(vm, BOOL_VAL(isFalsy(pop(vm))));
-				break;
-			}
-
-			case OP_POP: {
-				pop(vm);
-				break;
-			}
-
-			case OP_DEFINE_GLOBAL: {
-				ObjectString *name = READ_STRING();
-				bool isPublic = false;
-				if (checkPreviousInstruction(frame, 3, OP_PUB)) {
-					isPublic = true;
-				}
-				if (tableSet(vm, &vm->globals, name, peek(vm, 0), isPublic)) {
-					pop(vm);
-					break;
-				}
-				runtimePanic(vm, NAME, "Cannot define '%s' because it is already defined.", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
-			}
-
-			case OP_GET_GLOBAL: {
-				ObjectString *name = READ_STRING();
-				Value value;
-				if (tableGet(&vm->globals, name, &value)) {
-					push(vm, value);
-					break;
-				}
-				runtimePanic(vm, NAME, "Undefined variable '%s'.", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
-			}
-
-			case OP_SET_GLOBAL: {
-				ObjectString *name = READ_STRING();
-				if (tableSet(vm, &vm->globals, name, peek(vm, 0), false)) {
-					runtimePanic(vm, NAME, "Cannot give variable '%s' a value because it has not been defined",
-					             name->chars);
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_GET_LOCAL: {
-				uint8_t slot = READ_BYTE();
-				push(vm, frame->slots[slot]);
-				break;
-			}
-
-			case OP_SET_LOCAL: {
-				uint8_t slot = READ_BYTE();
-				frame->slots[slot] = peek(vm, 0);
-				break;
-			}
-
-			case OP_JUMP_IF_FALSE: {
-				uint16_t offset = READ_SHORT();
-				if (isFalsy(peek(vm, 0))) {
-					frame->ip += offset;
-					break;
-				}
-				break;
-			}
-
-			case OP_JUMP: {
-				uint16_t offset = READ_SHORT();
-				frame->ip += offset;
-				break;
-			}
-
-			case OP_LOOP: {
-				uint16_t offset = READ_SHORT();
-				frame->ip -= offset;
-				break;
-			}
-
-			case OP_CALL: {
-				int argCount = READ_BYTE();
-				if (!callValue(vm, peek(vm, argCount), argCount)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				frame = &vm->frames[vm->frameCount - 1];
-				break;
-			}
-
-			case OP_GET_UPVALUE: {
-				uint8_t slot = READ_BYTE();
-				push(vm, *frame->closure->upvalues[slot]->location);
-				break;
-			}
-
-			case OP_SET_UPVALUE: {
-				uint8_t slot = READ_BYTE();
-				*frame->closure->upvalues[slot]->location = peek(vm, 0);
-				break;
-			}
-
-			case OP_CLOSE_UPVALUE: {
-				closeUpvalues(vm, vm->stackTop - 1);
-				pop(vm);
-				break;
-			}
-
-			case OP_CLASS: {
-				push(vm, OBJECT_VAL(newClass(vm, READ_STRING())));
-				break;
-			}
-
-			case OP_GET_PROPERTY: {
-				Value receiver = peek(vm, 0);
-				if (!IS_CRUX_INSTANCE(receiver)) {
-					ObjectString *name = READ_STRING();
-					runtimePanic(vm, TYPE, 
-						"Cannot access property '%s' on non-instance value. %s", 
-						name->chars, typeErrorMessage(vm, receiver, "instance"));
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				ObjectInstance *instance = AS_CRUX_INSTANCE(receiver);
-				ObjectString *name = READ_STRING();
-
-				Value value;
-				bool fieldFound = false;
-				if (tableGet(&instance->fields, name, &value)) {
-					pop(vm);
-					push(vm, value);
-					fieldFound = true;
-					break;
-				}
-
-				if (!fieldFound) {
-					if (!bindMethod(vm, instance->klass, name)) {
-						return INTERPRET_RUNTIME_ERROR;
-					}
-				}
-				break;
-			}
-
-			case OP_SET_PROPERTY: {
-				Value receiver = peek(vm, 1);
-				if (!IS_CRUX_INSTANCE(receiver)) {
-					ObjectString *name = READ_STRING();
-					runtimePanic(vm, TYPE, 
-						"Cannot set property '%s' on non-instance value. %s", 
-						name->chars, typeErrorMessage(vm, receiver, "instance"));
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				ObjectInstance *instance = AS_CRUX_INSTANCE(receiver);
-				ObjectString *name = READ_STRING();
-				
-				if (tableSet(vm, &instance->fields, name, peek(vm, 0), false)) {
-					Value value = pop(vm);
-					pop(vm);
-					push(vm, value);
-					break;
-				}
-				runtimePanic(vm, NAME, "Cannot set undefined property '%s'.", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			case OP_METHOD: {
-				defineMethod(vm, READ_STRING());
-				break;
-			}
-
-			case OP_INVOKE: {
-				ObjectString *methodName = READ_STRING();
-				int argCount = READ_BYTE();
-				if (!invoke(vm, methodName, argCount)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				frame = &vm->frames[vm->frameCount - 1];
-				break;
-			}
-
-			case OP_INHERIT: {
-				Value superClass = peek(vm, 1);
-
-				if (!IS_CRUX_CLASS(superClass)) {
-					runtimePanic(vm, TYPE, "Cannot inherit from non class object.");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				ObjectClass *subClass = AS_CRUX_CLASS(peek(vm, 0));
-				tableAddAll(vm, &AS_CRUX_CLASS(superClass)->methods, &subClass->methods);
-				pop(vm);
-				break;
-			}
-
-			case OP_GET_SUPER: {
-				ObjectString *name = READ_STRING();
-				ObjectClass *superClass = AS_CRUX_CLASS(pop(vm));
-
-				if (!bindMethod(vm, superClass, name)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_SUPER_INVOKE: {
-				ObjectString *method = READ_STRING();
-				int argCount = READ_BYTE();
-				ObjectClass *superClass = AS_CRUX_CLASS(pop(vm));
-				if (!invokeFromClass(vm, superClass, method, argCount)) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				frame = &vm->frames[vm->frameCount - 1];
-				break;
-			}
-
-			case OP_ARRAY: {
-				uint16_t elementCount = READ_SHORT();
-				ObjectArray *array = newArray(vm, elementCount);
-				for (int i = elementCount - 1; i >= 0; i--) {
-					arrayAdd(vm, array, pop(vm), i);
-				}
-				push(vm, OBJECT_VAL(array));
-				break;
-			}
-
-			case OP_TABLE: {
-				uint16_t elementCount = READ_SHORT();
-				ObjectTable *table = newTable(vm, elementCount);
-				for (int i = elementCount - 1; i >= 0; i--) {
-					Value value = pop(vm);
-					Value key = pop(vm);
-					if (IS_NUMBER(key) || IS_CRUX_STRING(key)) {
-						if (!objectTableSet(vm, table, key, value)) {
-							runtimePanic(vm, COLLECTION_SET, "Failed to set value in table");
-							return INTERPRET_RUNTIME_ERROR;
-						}
-					} else {
-						runtimePanic(vm, TYPE, "Key cannot be hashed.", READ_STRING());
-						return INTERPRET_RUNTIME_ERROR;
-					}
-				}
-				push(vm, OBJECT_VAL(table));
-				break;
-			}
-
-			case OP_GET_COLLECTION: {
-				Value indexValue = pop(vm);
-				if (!IS_CRUX_OBJECT(peek(vm, 0))) {
-					runtimePanic(vm, TYPE, "Cannot get from a non-collection type.");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				switch (AS_CRUX_OBJECT(peek(vm, 0))->type) {
-					case OBJECT_TABLE: {
-						if (IS_CRUX_STRING(indexValue) || IS_NUMBER(indexValue)) {
-							ObjectTable *table = AS_CRUX_TABLE(peek(vm, 0));
-							Value value;
-							if (!objectTableGet(table, indexValue, &value)) {
-								runtimePanic(vm, COLLECTION_GET, "Failed to get value from table");
-								return INTERPRET_RUNTIME_ERROR;
-							}
-							pop(vm);
-							push(vm, value);
-						} else {
-							runtimePanic(vm, TYPE, "Key cannot be hashed.", READ_STRING());
-							return INTERPRET_RUNTIME_ERROR;
-						}
-						break;
-					}
-					case OBJECT_ARRAY: {
-						if (!IS_NUMBER(indexValue)) {
-							runtimePanic(vm, TYPE, "Index must be of type 'number'.");
-							return INTERPRET_RUNTIME_ERROR;
-						}
-						int index = AS_NUMBER(indexValue);
-						ObjectArray *array = AS_CRUX_ARRAY(peek(vm, 0));
-						Value value;
-						if (index < 0 || index >= array->size) {
-							runtimePanic(vm, INDEX_OUT_OF_BOUNDS, "Index out of bounds.");
-							return INTERPRET_RUNTIME_ERROR;
-						}
-						if (!arrayGet(array, index, &value)) {
-							runtimePanic(vm, COLLECTION_GET, "Failed to get value from array");
-							return INTERPRET_RUNTIME_ERROR;
-						}
-						pop(vm); // pop the array off the stack
-						push(vm, value); // push the value onto the stack
-						break;
-					}
-					case OBJECT_STRING: {
-						if (!IS_NUMBER(indexValue)) {
-							runtimePanic(vm, TYPE, "Index must be of type 'number'.");
-							return INTERPRET_RUNTIME_ERROR;
-						}
-						int index = AS_NUMBER(indexValue);
-						ObjectString *string = AS_CRUX_STRING(peek(vm, 0));
-						ObjectString *ch;
-						if (index < 0 || index >= string->length) {
-							runtimePanic(vm, INDEX_OUT_OF_BOUNDS, "Index out of bounds.");
-							return INTERPRET_RUNTIME_ERROR;
-						}
-						// Only single character indexing
-						ch = copyString(vm, string->chars+index, 1);
-						pop(vm);
-						push(vm, OBJECT_VAL(ch));
-						break;
-					}
-					default: {
-						runtimePanic(vm, TYPE, "Cannot get from a non-collection type.");
-						return INTERPRET_RUNTIME_ERROR;
-					}
-				}
-				break;
-			}
-
-			case OP_SET_COLLECTION: {
-				Value value = pop(vm);
-				Value indexValue = peek(vm, 0);
-
-				if (IS_CRUX_TABLE(peek(vm, 1))) {
-					ObjectTable *table = AS_CRUX_TABLE(peek(vm, 1));
-					if (IS_NUMBER(indexValue) || IS_CRUX_STRING(indexValue)) {
-						if (!objectTableSet(vm, table, indexValue, value)) {
-							runtimePanic(vm, COLLECTION_GET, "Failed to set value in table");
-							return INTERPRET_RUNTIME_ERROR;
-						}
-					} else {
-						runtimePanic(vm, TYPE, "Key cannot be hashed.");
-						return INTERPRET_RUNTIME_ERROR;
-					}
-				} else if (IS_CRUX_ARRAY(peek(vm, 1))) {
-					ObjectArray *array = AS_CRUX_ARRAY(peek(vm, 1));
-					int index = AS_NUMBER(indexValue);
-					if (!arraySet(vm, array, index, value)) {
-						runtimePanic(vm, COLLECTION_SET, "Failed to set value in array");
-						return INTERPRET_RUNTIME_ERROR;
-					}
-				} else {
-					runtimePanic(vm, TYPE, "Value is not a mutable collection type.");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				pop(vm); // collection
-				pop(vm); // indexValue
-				push(vm, indexValue);
-				break;
-			}
-
-			case OP_SET_LOCAL_SLASH: {
-				uint8_t slot = READ_BYTE();
-				Value currentValue = frame->slots[slot];
-
-				if (!(IS_NUMBER(currentValue) && IS_NUMBER(peek(vm, 0)))) {
-					runtimePanic(vm, TYPE, "Both operands must be of type 'number' for the '/=' operator");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				double divisor = AS_NUMBER(peek(vm, 0));
-
-				if (divisor == 0.0) {
-					runtimePanic(vm, DIVISION_BY_ZERO, "Divisor must be non-zero.");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				frame->slots[slot] = NUMBER_VAL(AS_NUMBER(currentValue) / divisor);
-				break;
-			}
-			case OP_SET_LOCAL_STAR: {
-				uint8_t slot = READ_BYTE();
-				Value currentValue = frame->slots[slot];
-
-				if (!(IS_NUMBER(currentValue) && IS_NUMBER(peek(vm, 0)))) {
-					runtimePanic(vm, TYPE, "Both operands must be of type 'number' for the '*=' operator");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				frame->slots[slot] = NUMBER_VAL(AS_NUMBER(currentValue) * AS_NUMBER(peek(vm, 0)));
-				break;
-			}
-			case OP_SET_LOCAL_PLUS: {
-				uint8_t slot = READ_BYTE();
-				Value currentValue = frame->slots[slot];
-
-				if (!(IS_NUMBER(currentValue) && IS_NUMBER(peek(vm, 0)))) {
-					runtimePanic(vm, TYPE, "Both operands must be of type 'number' for the '+=' operator");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				frame->slots[slot] = NUMBER_VAL(AS_NUMBER(currentValue) + AS_NUMBER(peek(vm, 0)));
-				break;
-			}
-			case OP_SET_LOCAL_MINUS: {
-				uint8_t slot = READ_BYTE();
-				Value currentValue = frame->slots[slot];
-
-				if (!(IS_NUMBER(currentValue) && IS_NUMBER(peek(vm, 0)))) {
-					runtimePanic(vm, TYPE, "Both operands must be of type 'number' for the '-=' operator");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				frame->slots[slot] = NUMBER_VAL(AS_NUMBER(currentValue) - AS_NUMBER(peek(vm, 0)));
-				break;
-			}
-			case OP_SET_UPVALUE_SLASH: {
-				uint8_t slot = READ_BYTE();
-				Value currentValue = *frame->closure->upvalues[slot]->location;
-
-				if (!(IS_NUMBER(currentValue) && IS_NUMBER(peek(vm, 0)))) {
-					runtimePanic(vm, TYPE, "Both operands must be of type 'number' for the '/=' operator");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				double divisor = AS_NUMBER(peek(vm, 0));
-				if (divisor == 0.0) {
-					runtimePanic(vm, DIVISION_BY_ZERO, "Divisor must be non-zero.");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				*frame->closure->upvalues[slot]->location = NUMBER_VAL(AS_NUMBER(currentValue) / divisor);
-
-				break;
-			}
-			case OP_SET_UPVALUE_STAR: {
-				uint8_t slot = READ_BYTE();
-				Value currentValue = *frame->closure->upvalues[slot]->location;
-
-				if (!(IS_NUMBER(currentValue) && IS_NUMBER(peek(vm, 0)))) {
-					runtimePanic(vm, TYPE, "Both operands must be of type 'number' for the '*=' operator");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				*frame->closure->upvalues[slot]->location =
-						NUMBER_VAL(AS_NUMBER(currentValue) * AS_NUMBER(peek(vm, 0)));
-				break;
-			}
-			case OP_SET_UPVALUE_PLUS: {
-				uint8_t slot = READ_BYTE();
-				Value currentValue = *frame->closure->upvalues[slot]->location;
-
-				if (!(IS_NUMBER(currentValue) && IS_NUMBER(peek(vm, 0)))) {
-					runtimePanic(vm, TYPE, "Both operands must be of type 'number' for the '+=' operator");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				*frame->closure->upvalues[slot]->location =
-						NUMBER_VAL(AS_NUMBER(currentValue) + AS_NUMBER(peek(vm, 0)));
-
-				break;
-			}
-			case OP_SET_UPVALUE_MINUS: {
-				uint8_t slot = READ_BYTE();
-				Value currentValue = *frame->closure->upvalues[slot]->location;
-
-				if (!(IS_NUMBER(currentValue) && IS_NUMBER(peek(vm, 0)))) {
-					runtimePanic(vm, TYPE, "Both operands must be of type 'number' for the '-=' operator");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				*frame->closure->upvalues[slot]->location =
-						NUMBER_VAL(AS_NUMBER(currentValue) - AS_NUMBER(peek(vm, 0)));
-				break;
-			}
-			case OP_SET_GLOBAL_SLASH: {
-				ObjectString *name = READ_STRING();
-				if (globalCompoundOperation(vm, name, OP_SET_GLOBAL_SLASH, "/=") == INTERPRET_RUNTIME_ERROR) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-			case OP_SET_GLOBAL_STAR: {
-				ObjectString *name = READ_STRING();
-				if (globalCompoundOperation(vm, name, OP_SET_GLOBAL_STAR, "*=") == INTERPRET_RUNTIME_ERROR) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-			case OP_SET_GLOBAL_PLUS: {
-				ObjectString *name = READ_STRING();
-				if (globalCompoundOperation(vm, name, OP_SET_GLOBAL_PLUS, "+=") == INTERPRET_RUNTIME_ERROR) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-			case OP_SET_GLOBAL_MINUS: {
-				ObjectString *name = READ_STRING();
-				if (globalCompoundOperation(vm, name, OP_SET_GLOBAL_MINUS, "-=") == INTERPRET_RUNTIME_ERROR) {
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
-			}
-
-			case OP_ANON_FUNCTION: {
-				ObjectFunction *function = AS_CRUX_FUNCTION(READ_CONSTANT());
-				ObjectClosure *closure = newClosure(vm, function);
-				push(vm, OBJECT_VAL(closure));
-				for (int i = 0; i < closure->upvalueCount; i++) {
-					uint8_t isLocal = READ_BYTE();
-					uint8_t index = READ_BYTE();
-
-					if (isLocal) {
-						closure->upvalues[i] = captureUpvalue(vm, frame->slots + index);
-					} else {
-						closure->upvalues[i] = frame->closure->upvalues[index];
-					}
-				}
-				break;
-			}
-
-			case OP_PUB: {
-				break;
-			}
-
-			case OP_USE: {
-				uint8_t nameCount = READ_BYTE();
-				ObjectString *names[UINT8_MAX];
-				ObjectString *aliases[UINT8_MAX];
-				for (int i = 0; i < nameCount; i++) {
-					names[i] = READ_STRING();
-				}
-				for (int i = 0; i < nameCount; i++) {
-					aliases[i] = READ_STRING();
-				}
-				ObjectString *modulePath = READ_STRING();
-
-				if (importSetContains(&vm->module->importedModules, modulePath)) {
-					runtimePanic(vm, IMPORT,
-					             "Module '%s' has already been imported. All imports must be done in a single 'use' statement.",
-					             modulePath->chars);
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				if (modulePath->length > 4 && memcmp(modulePath->chars, "crux:", 5) == 0) {
-					char *moduleName = modulePath->chars + 5;
-					int moduleIndex = -1;
-					for (int i = 0; i < vm->nativeModules.count; i++) {
-						if (memcmp(moduleName, vm->nativeModules.modules[i].name, strlen(moduleName)) == 0) {
-							moduleIndex = i;
-							break;
-						}
-					}
-					if (moduleIndex == -1) {
-						runtimePanic(vm, IMPORT, "Module '%s' does not exist.", modulePath->chars);
-						return INTERPRET_RUNTIME_ERROR;
-					}
-
-					Table *moduleTable = vm->nativeModules.modules[moduleIndex].names;
-					for (int i = 0; i < nameCount; i++) {
-						Value value;
-						bool getSuccess = tableGet(moduleTable, names[i], &value);
-						if (!getSuccess) {
-							runtimePanic(vm, IMPORT, "Failed to import '%s' from '%s'.", names[i]->chars,
-							             modulePath->chars);
-							return INTERPRET_RUNTIME_ERROR;
-						}
-						push(vm, OBJECT_VAL(value));
-						bool setSuccess = false;
-						if (aliases[i] != NULL) {
-							setSuccess = tableSet(vm, &vm->globals, aliases[i], value, false);
-						} else {
-							setSuccess = tableSet(vm, &vm->globals, names[i], value, false);
-						}
-
-						if (!setSuccess) {
-							runtimePanic(vm, IMPORT, "Failed to import '%s' from '%s'.", names[i]->chars,
-							             modulePath->chars);
-							return INTERPRET_RUNTIME_ERROR;
-						}
-						pop(vm);
-					}
-					importSetAdd(vm, &vm->module->importedModules, modulePath);
-					break;
-				}
-
-				char *resolvedPath = resolvePath(vm->module->path->chars, modulePath->chars);
-				if (resolvedPath == NULL) {
-					runtimePanic(vm, IO, "Could not resolve path to module.");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				FileResult source = readFile(resolvedPath);
-				if (source.error != NULL) {
-					runtimePanic(vm, IO, source.error);
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				if (vm->module->state == IN_PROGRESS) {
-					freeFileResult(source);
-					free(resolvedPath);
-					runtimePanic(vm, IMPORT, "Circular import detected in \"%s\".", modulePath->chars);
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				if (vm->module->vmDepth > MAX_VM_DEPTH) {
-					freeFileResult(source);
-					free(resolvedPath);
-					runtimePanic(vm, IMPORT, "Maximum import depth exceeded.");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				VM *newModuleVM = newVM();
-				newModuleVM->enclosing = vm;
-
-				newModuleVM->module = newModule(newModuleVM, modulePath->chars);
-				newModuleVM->module->state = IN_PROGRESS;
-				newModuleVM->module->vmDepth = vm->module->vmDepth + 1;
-
-				InterpretResult result = interpret(newModuleVM, source.content);
-				freeFileResult(source);
-				free(resolvedPath);
-				if (result != INTERPRET_OK) {
-					freeVM(newModuleVM);
-					return result;
-				}
-
-				newModuleVM->module->state = IMPORTED;
-
-				// add the imported names to the current module (deep copy)
-				bool success = true;
-				for (int i = 0; i < nameCount; i++) {
-					if (aliases[i] != NULL && IS_CRUX_STRING(OBJECT_VAL(aliases[i]))) {
-						success = tableDeepCopy(newModuleVM, vm, &newModuleVM->globals, &vm->globals, names[i],
-						                        aliases[i]);
-					} else {
-						success = tableDeepCopy(newModuleVM, vm, &newModuleVM->globals, &vm->globals, names[i],
-						                        names[i]);
-					}
-					if (!success) {
-						for (int j = 0; j < i; j++) {
-							tableDelete(&vm->globals, names[j]);
-						}
-						runtimePanic(vm, NAME, "Failed to import '%s' from module '%s'.", names[i]->chars,
-						             modulePath->chars);
-						return INTERPRET_RUNTIME_ERROR;
-					}
-				}
-
-				importSetAdd(vm, &vm->module->importedModules, modulePath);
-				freeVM(newModuleVM);
-				break;
-			}
-
-			case OP_MATCH: {
-				Value target = peek(vm, 0);
-				vm->matchHandler.matchTarget = target;
-				vm->matchHandler.isMatchTarget = true;
-				break;
-			}
-
-			case OP_MATCH_JUMP: {
-				uint16_t offset = READ_SHORT();
-				Value pattern = pop(vm);
-				Value target = peek(vm, 0);
-				if (!valuesEqual(pattern, target)) {
-					frame->ip += offset;
-				}
-
-				break;
-			}
-
-			case OP_RESULT_MATCH_ERR: {
-				uint16_t offset = READ_SHORT();
-				Value target = peek(vm, 0);
-
-				if (!IS_CRUX_RESULT(target) || AS_CRUX_RESULT(target)->isOk) {
-					frame->ip += offset;
-				} else {
-					Value error = OBJECT_VAL(AS_CRUX_RESULT(target)->as.error);
-					pop(vm);
-					push(vm, error);
-				}
-				break;
-			}
-
-			case OP_RESULT_MATCH_OK: {
-				uint16_t offset = READ_SHORT();
-				Value target = peek(vm, 0);
-
-				if (!IS_CRUX_RESULT(target) || !AS_CRUX_RESULT(target)->isOk) {
-					frame->ip += offset;
-				} else {
-					Value value = AS_CRUX_RESULT(target)->as.value;
-					pop(vm);
-					push(vm, value);
-				}
-				break;
-			}
-
-			case OP_RESULT_BIND: {
-				uint8_t slot = READ_BYTE();
-				Value bind = peek(vm, 0);
-				vm->matchHandler.matchBind = bind;
-				vm->matchHandler.isMatchBind = true;
-				frame->slots[slot] = bind;
-				break;
-			}
-
-			case OP_MATCH_END: {
-				if (vm->matchHandler.isMatchBind) {
-					push(vm, vm->matchHandler.matchBind);
-				}
-
-				vm->matchHandler.matchTarget = NIL_VAL;
-				vm->matchHandler.matchBind = NIL_VAL;
-
-				vm->matchHandler.isMatchBind = false;
-				vm->matchHandler.isMatchTarget = false;
-
-				break;
-			}
-
-			case OP_GIVE: {
-				Value result = pop(vm);
-				pop(vm);
-				push(vm, result);
-				break;
-			}
-		}
-		vm->previousInstruction = instruction;
+		goto* dispatchTable[instruction];
 	}
+
 #undef READ_BYTE
 #undef READ_CONSTANT
 #undef BINARY_OP
@@ -1613,6 +2217,7 @@ static InterpretResult run(VM *vm) {
 #undef READ_STRING
 #undef READ_SHORT
 }
+
 
 InterpretResult interpret(VM *vm, char *source) {
 	ObjectFunction *function = compile(vm, source);

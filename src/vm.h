@@ -67,7 +67,6 @@ struct VM {
 	NativeType fileType;
 	struct VM *enclosing;
 	int grayCapacity;
-	uint8_t previousInstruction; 
 	ObjectModule *module;
 	NativeModules nativeModules;
 	MatchHandler matchHandler;

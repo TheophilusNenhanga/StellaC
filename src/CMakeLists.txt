@@ -1,4 +1,8 @@
 cmake_minimum_required(VERSION 3.28)
+
+set(CMAKE_C_COMPILER gcc)
+set(CMAKE_CXX_COMPILER g++)
+
 project(crux-lang C)
 
 set(CMAKE_C_STANDARD 11)
@@ -8,9 +12,6 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(CMAKE_C_FLAGS_RELEASE "-O3")
-set(CMAKE_C_FLAGS_PROFILE "-pg")
-set(CMAKE_EXE_LINKER_FLAGS_PROFILE "-pg")
-
 
 file(GLOB SOURCES 
     "*.c" 
